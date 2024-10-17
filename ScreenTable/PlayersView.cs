@@ -3,10 +3,10 @@ using System.Drawing.Drawing2D;
 namespace ScreenTable;
 public sealed partial class PlayersView : Form
 {
-    private readonly Bitmap _playersImage;
+    private readonly Image _playersImage;
     private readonly MapInfo _mapInfo;
-    private readonly float _dpiX;
-    private readonly float _dpiY;
+    private float _dpiX;
+    private float _dpiY;
     private float _zoomBaseX;
     private float _zoomBaseY;
     private float _zoomFactor;
@@ -16,7 +16,7 @@ public sealed partial class PlayersView : Form
     private PointF _center;
     private readonly Color _gridColor = Color.FromArgb(128,Color.Yellow);
 
-    public PlayersView(Bitmap playersImage, MapInfo mapInfo)
+    public PlayersView(Image playersImage, MapInfo mapInfo)
     {
         _playersImage = playersImage;
         _mapInfo = mapInfo;
@@ -79,8 +79,14 @@ public sealed partial class PlayersView : Form
     private void OnPaint(object? sender, PaintEventArgs e)
     {
         // draw the _originalImage and overlay it with the _overlay
-        
+        //DeviceDpi 
         Graphics g = e.Graphics;
+        _dpiX = DeviceDpi;
+        _dpiY = DeviceDpi;
+        _zoomBaseX = _dpiX/_mapInfo.CellSize;
+        _zoomBaseY = _dpiY/_mapInfo.CellSize;
+        
+        
         Rectangle clipRect = e.ClipRectangle;
         g.SetClip(clipRect);
         var rectInOriginal = GetViewAreaInOriginal(); 

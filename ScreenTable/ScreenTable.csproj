@@ -3,7 +3,7 @@
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
         <TargetFramework>net8.0-windows</TargetFramework>
-        <Nullable>enable</Nullable>
+        <Nullable>disable</Nullable>
         <UseWindowsForms>true</UseWindowsForms>
         <ImplicitUsings>enable</ImplicitUsings>
     </PropertyGroup>
@@ -15,6 +15,10 @@
       <Compile Update="GMControl.cs">
         <SubType>UserControl</SubType>
       </Compile>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     </ItemGroup>
 
 </Project>
