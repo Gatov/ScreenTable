@@ -1,7 +1,6 @@
 using System.Diagnostics;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
 using Newtonsoft.Json;
+using ScreenTable.Tools;
 using Timer = System.Windows.Forms.Timer;
 
 
@@ -10,28 +9,23 @@ namespace ScreenTable;
 public sealed partial class GMControl : UserControl
 {
     private Image Bmp => _foggedMap?.OriginalImage;
-    //private Bitmap _gmOverlay;
 
     private Mode _mode = Mode.None;
     private readonly Timer _timer;
     readonly Stopwatch _lastDraw = new Stopwatch();
+    private ToolCalibrate _calibrationTool;
+    private ITool _currentTool;
     public event Action NeedRepaint;
-    private readonly int _brushSize = 50;
-    //private Bitmap _playersImage;
-    //private TextureBrush _revealBrush;
-    //private TextureBrush _semiRevealBrush;
+    private int BrushSize =>(int) ((_mapInfo?.CellSize??20) * 4);
     private PointF _previousLocation= PointF.Empty;
-    private readonly double _density = 3;
+    private double Density => BrushSize/8.0;
     private PlayersView _playerView;
-    private Point _calibrationStart;
-    private Point _calibrationCurrent;
-    private int _calibrationCells = 8;
-    private readonly int _minCalibrationDistance = 40;
     private MapInfo _mapInfo;
-    private float _calibrationCellSize = 0;
     private float _currentPlayerZoom = 1;
     private float _currentGmZoom = 1;
     private FoggedMap _foggedMap;
+
+    public event Action<MapInfo> MapInfoChanged; 
 
 
     public GMControl()
@@ -59,43 +53,31 @@ public sealed partial class GMControl : UserControl
        
         NeedRepaint += ()=> _playerView?.Invalidate();
     }
-/*
-    private void OnKeyUp(object sender, KeyEventArgs e)
-    {
-        if(e.KeyData.HasFlag(Keys.Shift))
-        {
-            Invalidate();
-            e.Handled = true;
-        }
-    }*/
-
-/*    private void OnKeyDown(object sender, KeyEventArgs e)
-    {
-        if(e.KeyData.HasFlag(Keys.Shift))
-        {
-            Invalidate();
-            e.Handled = true;
-        }
-    }*/
-
     private void OnKeyPress(object sender, KeyPressEventArgs e)
     {
         switch (e.KeyChar)
         {
             case 'r': _currentGmZoom = 1;
                 e.Handled = true;
+                Invalidate();
                 break;
             case 'f': 
                 var aspect = Math.Min((float)ClientSize.Width/Bmp.Width, (float)ClientSize.Height/Bmp.Height);
                 _currentGmZoom = (float)Math.Max(0.1,Math.Round(aspect, 1));
                 e.Handled = true;
+                Invalidate();
                 break;
             case 's': // save
-                var text = JsonConvert.SerializeObject(_mapInfo, Formatting.Indented);
-                var jsonFile = Path.ChangeExtension(_mapInfo.FileName, ".json"); 
-                File.WriteAllText(jsonFile!, text);
+                Save();
                 break;
         }
+    }
+
+    private void Save()
+    {
+        var text = JsonConvert.SerializeObject(_mapInfo, Formatting.Indented);
+        var jsonFile = Path.ChangeExtension(_mapInfo.FileName, ".json"); 
+        File.WriteAllText(jsonFile!, text);
     }
 
     public event Action<Mode> OnModeChanged;
@@ -134,7 +116,16 @@ public sealed partial class GMControl : UserControl
                 if (fileDrop != null)
                 {
                     _foggedMap?.Dispose();
-                    LoadMap(fileDrop);
+                    try
+                    {
+                        UseWaitCursor = true;
+                        LoadMap(fileDrop);
+                    }
+                    finally
+                    {
+                        UseWaitCursor = false;
+                    }
+                    
                 }
             }
             catch (Exception exception)
@@ -159,8 +150,9 @@ public sealed partial class GMControl : UserControl
 
         if (File.Exists(_mapInfo.FileName) == false) // files were moved, combine new path with filename
             _mapInfo.FileName = Path.Combine(Path.GetDirectoryName(fileDrop)!, Path.GetFileName(_mapInfo.FileName)!);
-            
-        
+
+        _calibrationTool = new ToolCalibrate(_mapInfo);
+        _calibrationTool.RequiresRepaint += CurrentToolOnRequiresRepaint;
         _foggedMap = new FoggedMap(_mapInfo.FileName);
         _foggedMap.OnRectUpdated += unscaledRect =>
         {
@@ -173,36 +165,44 @@ public sealed partial class GMControl : UserControl
         _playerView.SetCenter(new PointF(Bmp.Width/2f, Bmp.Height/2f));
         _playerView.SetZoom(_currentPlayerZoom);
         _playerView.Show();
+        MapInfoChanged?.Invoke(_mapInfo);
         Invalidate();
+    }
+
+    private void CurrentToolOnRequiresRepaint(RectangleF obj)
+    {
+        if(obj.IsEmpty)
+            Invalidate();
+        else
+            Invalidate(Rectangle.Ceiling(TranslateToScaledRect(obj)));
     }
 
     private void OnMouseWheel(object? sender, MouseEventArgs e)
     {
         if(Bmp == null) return;
-        if (_mode == Mode.Calibrate)
+        if (_currentTool != null)
         {
-            _calibrationCells += e.Delta/120;
-            _calibrationCells = Math.Max(2, _calibrationCells);
-            Invalidate();
+            _currentTool.OnMouseWheel(e.Delta, ModifierKeys);
             return;
         }
-        
         if (ModifierKeys == Keys.None)
         {
             
-            var oldRect = Rectangle.Ceiling(_playerView.GetViewAreaInOriginal());
+            var oldRect = _playerView.GetViewAreaInOriginal();
             _currentPlayerZoom = Math.Max(0.2f, Math.Min(5, _currentPlayerZoom + e.Delta / 1200.0f));
             _playerView.SetZoom(_currentPlayerZoom);
-            var rect = Rectangle.Ceiling(_playerView.GetViewAreaInOriginal());
+            var rect = _playerView.GetViewAreaInOriginal();
 
             var toRedraw = e.Delta > 0 ? oldRect : rect;
             
-            toRedraw.Inflate(1, 1);
-            Invalidate(toRedraw);
+            toRedraw.Inflate(10, 10);
+            
+            Invalidate(Rectangle.Ceiling(TranslateToScaledRect(toRedraw)));
+            //Invalidate();
         }
         else if(ModifierKeys == Keys.Shift)
         {
-            _currentGmZoom = Math.Max(0.2f, Math.Min(5, _currentGmZoom + e.Delta / 1200.0f));
+            _currentGmZoom = Math.Max(0.1f, Math.Min(10, _currentGmZoom + e.Delta / 1200.0f));
             Invalidate();
         }
 
@@ -211,10 +211,13 @@ public sealed partial class GMControl : UserControl
     private void TimerOnTick(object? sender, EventArgs e)
     {
         if(Bmp == null) return;
-        if(_lastDraw.Elapsed < TimeSpan.FromSeconds(0.2))
+        
+        if(_lastDraw.IsRunning && _lastDraw.Elapsed > TimeSpan.FromSeconds(0.2))
         {
+            _lastDraw.Stop();
             NeedRepaint?.Invoke();
         }
+        
     }
 
     protected override void OnPaintBackground(PaintEventArgs e)
@@ -226,8 +229,6 @@ public sealed partial class GMControl : UserControl
         if(_foggedMap == null) return;
         Graphics g = e.Graphics;
         g.ScaleTransform(_currentGmZoom, _currentGmZoom);
-        //g.CompositingQuality = CompositingQuality.HighSpeed;
-        //g.InterpolationMode = InterpolationMode.Low;
         Rectangle clipRect = e.ClipRectangle;
 
         Stopwatch sw = Stopwatch.StartNew();
@@ -237,57 +238,25 @@ public sealed partial class GMControl : UserControl
         g.SetClip(unscaledRect);
         bool drawFog = _mode != Mode.Calibrate;
         _foggedMap.Draw(g, unscaledRect, drawFog);
-        //g.DrawImage(_bmp, unscaledRect, unscaledRect, GraphicsUnit.Pixel);
-        System.Diagnostics.Debug.WriteLine($"GMControl.Paint 1: {sw.Elapsed} - {unscaledRect}");
-        //if (_mode != Mode.Calibrate)
-        //    g.DrawImage(_gmOverlay, unscaledRect, unscaledRect, GraphicsUnit.Pixel);
-        System.Diagnostics.Debug.WriteLine($"GMControl.Paint 2: {sw.Elapsed} - {unscaledRect}");
         g.DrawRectangle(Pens.Aquamarine, Rectangle.Ceiling(_playerView.GetViewAreaInOriginal()));
         sw.Stop();
-        System.Diagnostics.Debug.WriteLine($"GMControl.Paint 3: {sw.Elapsed} - {unscaledRect}");
-        if (_mode == Mode.Calibrate)
-            PaintCalibration(g);
-        // invert the alpha channel of _overlay and draw it
-
-    }
-
-    private void PaintCalibration(Graphics graphics)
-    {
-        graphics.ScaleTransform(1, 1);
-        float minDistance = Math.Min(_calibrationCurrent.X - _calibrationStart.X, _calibrationCurrent.Y - _calibrationStart.Y);
-        // we should fit at least _calibrationCells in this distance, se, limit the distance to be minimum _minCalibrationDistance
-        using var pen = new Pen(Color.FromArgb(40,Color.Yellow), 1);
-        using var cross = new Pen(Color.Orange, 1);
-        if(minDistance >= _minCalibrationDistance)
-        {
-            _calibrationCellSize = minDistance / _calibrationCells; // we will fit 5 cells in there
-            float xOffset = _calibrationStart.X % _calibrationCellSize;
-            float yOffset = _calibrationStart.Y % _calibrationCellSize;
-            // draw a grid
-            for(float x = xOffset; x < ClientSize.Width; x+=_calibrationCellSize)
-                graphics.DrawLine(pen, x, 0, x, ClientSize.Height);
-            for(float y = yOffset; y < ClientSize.Height; y+=_calibrationCellSize)
-                graphics.DrawLine(pen, 0, y, ClientSize.Width, y);
-        }
-        // just draw cross-hair
-        graphics.DrawLine(cross, _calibrationStart.X, 0, _calibrationStart.X, ClientSize.Height);
-        graphics.DrawLine(cross, 0, _calibrationStart.Y, ClientSize.Width, _calibrationStart.Y);
-        graphics.DrawLine(cross, _calibrationCurrent.X, 0, _calibrationCurrent.X, ClientSize.Height);
-        graphics.DrawLine(cross, 0, _calibrationCurrent.Y, ClientSize.Width, _calibrationCurrent.Y);
-
+        System.Diagnostics.Debug.WriteLine($"GMControl.Paint: {sw.Elapsed} - {unscaledRect}");
+        if(_currentTool != null)
+            _currentTool.OnPaint(g);
     }
 
     private void OnMouseDown(object? sender, MouseEventArgs e)
     {
         if(Bmp == null) return;
         var unscaledPoint = TranslateToUnscaledPoint(e.Location);
+        if (_currentTool != null)
+        {
+            _currentTool.OnMouseDown(unscaledPoint, e.Button, ModifierKeys);
+            return;
+        }
+
         if (e.Button == MouseButtons.Left)
         {
-            if (_mode == Mode.Calibrate)
-            {
-                StartCalibrating(unscaledPoint);
-                return;
-            }
             // check if Shift is pressed
             if (ModifierKeys == Keys.None)
             {
@@ -307,11 +276,17 @@ public sealed partial class GMControl : UserControl
     private void OnMouseMove(object? sender, MouseEventArgs e)
     {
         if(Bmp == null) return;
-        var mapCoordinates = TranslateToUnscaledPoint(e.Location);
+        var unscaledPoint = TranslateToUnscaledPoint(e.Location);
+        if (_currentTool != null)
+        {
+            _currentTool.OnMouseMove(unscaledPoint,e.Button, ModifierKeys);
+            return;
+        }
         
         if (e.Button == MouseButtons.Middle && _mode == Mode.Pan)
         {
-            _playerView.SetCenter(mapCoordinates);
+            _mapInfo.Center = unscaledPoint;
+            _playerView.SetCenter(unscaledPoint);
             Invalidate();
             return;
         }
@@ -319,33 +294,15 @@ public sealed partial class GMControl : UserControl
 
         if (e.Button == MouseButtons.Left)
         {
-            if(_mode == Mode.Calibrate)
-            {
-                CalibratingMove(mapCoordinates);
-                return;
-            }
-            
             if (ModifierKeys == Keys.None && _mode == Mode.Reveal)
             {
-                RevealingMove(mapCoordinates);
+                RevealingMove(unscaledPoint);
                 return;
             }
         }
 
         //SetMode( Mode.None); // conditions have changed, reset
     }
-
-    private void StartCalibrating(Point unscaledPoint)
-    {
-        _calibrationStart = unscaledPoint;
-    }
-    private void CalibratingMove(Point unscaledPoint)
-    {
-        
-        _calibrationCurrent = unscaledPoint;
-        Invalidate();
-    }
-
     private void RevealingMove(Point unscaledPoint)
     {
         if (_previousLocation.IsEmpty )
@@ -357,18 +314,19 @@ public sealed partial class GMControl : UserControl
 
         var prevLoc = _previousLocation;
         var distance = FogUtil.CalculateDistance(prevLoc, unscaledPoint);
-        if(distance<_density) return;
+        if(distance<Density) return;
         double cX = (unscaledPoint.X - prevLoc.X)/distance;
         double cY = (unscaledPoint.Y - prevLoc.Y)/distance;
         double progress = 0;
-        while (distance > _density)
+        while (distance > Density)
         {
-            distance -= _density;
-            progress += _density;
+            distance -= Density;
+            progress += Density;
             var newUnscaled = new Point((int)(prevLoc.X + progress * cX), (int)(prevLoc.Y + progress * cY));
             try
             {
                 RevealAt(newUnscaled);
+                System.Diagnostics.Debug.WriteLine($"{newUnscaled}, {distance}");
             }
             catch (Exception exception)
             {
@@ -381,7 +339,7 @@ public sealed partial class GMControl : UserControl
 
     private void RevealAt(PointF unscaledPoint)
     {
-        _foggedMap.RevealAt(unscaledPoint, _brushSize);
+        _foggedMap.RevealAt(unscaledPoint, BrushSize);
         _lastDraw.Restart();
         _previousLocation = unscaledPoint;
     }
@@ -389,37 +347,39 @@ public sealed partial class GMControl : UserControl
     private void OnMouseUp(object? sender, MouseEventArgs e)
     {
         if(Bmp == null) return;
-        if (e.Button == MouseButtons.Left)
+        var unscaledPoint = TranslateToUnscaledPoint(e.Location);
+
+        if (_currentTool != null)
         {
-            if(_mode == Mode.Calibrate)
-                FinishCalibrating();
-            else
+            _currentTool.OnMouseUp(unscaledPoint,e.Button, ModifierKeys);
+            return;
+        }
+        
+        
+        if (e.Button == MouseButtons.Left || e.Button == MouseButtons.Middle)
+        {
+            //if(_mode == Mode.Calibrate)
+              //  FinishCalibrating();
+            //else
                 SetMode(Mode.None);
         }
     }
-
-    private void FinishCalibrating()
-    {
-        if (_calibrationCellSize > 0)
-        {
-            _mapInfo.CellSize = _calibrationCellSize;
-            _mapInfo.OffsetX = (int)(_calibrationStart.X % _calibrationCellSize);
-            _mapInfo.OffsetY = (int)(_calibrationStart.Y % _calibrationCellSize);
-            _playerView.UpdateMapInfo(_mapInfo);
-        }
-    }
-
-
-   
-
     public void Calibration(bool calibrateChecked)
     {
         if (calibrateChecked)
-            SetMode(Mode.Calibrate);
+        {
+           SetMode(Mode.Calibrate);
+           _currentTool = _calibrationTool;
+
+        }
         else
         {
-            FinishCalibrating();
+            //FinishCalibrating();
+            MapInfoChanged?.Invoke(_mapInfo);
+            _playerView.UpdateMapInfo(_mapInfo);
             SetMode(Mode.None);
+            _currentTool = null;
+            Save();
         }
     }
 }

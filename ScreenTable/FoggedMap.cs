@@ -93,10 +93,10 @@ public class FoggedMap : IDisposable
         {
             g.CompositingMode = CompositingMode.SourceOver;
             // set the _revealBrush to draw a portion of original image in place
-            var smaller = rect;
-            smaller.Inflate(-0.3f * brushSize, -0.3f * brushSize);
-            g.FillEllipse(_semiRevealBrush, rect);
-            g.FillEllipse(_revealBrush, smaller);
+            var bigger = rect;
+            bigger.Inflate(0.2f * brushSize, 0.2f * brushSize);
+            g.FillEllipse(_semiRevealBrush, bigger);
+            g.FillEllipse(_revealBrush, rect);
         }
         OnRectUpdated?.Invoke(rect);
     }

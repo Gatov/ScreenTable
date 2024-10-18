@@ -14,9 +14,9 @@ public partial class MainGmView : Form
 
     private readonly Dictionary<Mode, string> _tips = new Dictionary<Mode, string>()
     {
-        { Mode.None, "Drop Image for new map . Left Click to reveal . Middle Click to pan . Wheel to zoom . 'Calibrate' to calibrate grid" },
+        { Mode.None, "Drop Json/Image. Left Click to reveal . Middle Click to pan . Wheel to zoom Player. Shift-Wheel to zoom GM" },
         { Mode.Reveal, "Paint to Reveal" },
-        { Mode.Calibrate, "Calibrate, drag with Shift+Left Mouse button, then use Mouse wheel to adjust cells" },
+        { Mode.Calibrate, "Calibrate, drag with Left Mouse button, then use Wheel/Shift-Wheel to adjust cells" },
         { Mode.Pan, "Pan" }
     };
     
@@ -25,6 +25,7 @@ public partial class MainGmView : Form
         InitializeComponent();
         _gmControl = new GMControl();
         _gmControl.Dock = DockStyle.Fill;
+        Text = "Screen Table";
         
         StatusStrip statusStrip = new StatusStrip();
         var toolStripStatusLabel = new ToolStripStatusLabel(_tips[Mode.None]);;
@@ -53,5 +54,9 @@ public partial class MainGmView : Form
         
         Controls.Add(statusStrip);
         Controls.Add(_gmControl);
+        _gmControl.MapInfoChanged += m =>
+        {
+            Text = $"ScreenTable - {Path.GetFileNameWithoutExtension(m.FileName)}";
+        };
     }
 }

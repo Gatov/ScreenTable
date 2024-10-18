@@ -18,11 +18,13 @@ public sealed partial class PlayersView : Form
 
     public PlayersView(Image playersImage, MapInfo mapInfo)
     {
+       
         _playersImage = playersImage;
         _mapInfo = mapInfo;
         DoubleBuffered = true;
         InitializeComponent();
         Paint += OnPaint;
+        Load += OnLoad;
         SizeChanged += (sender, args) => UpdateVisibleArea();
         using (Graphics g = Graphics.FromHwnd(IntPtr.Zero))
         {
@@ -34,7 +36,17 @@ public sealed partial class PlayersView : Form
         _zoomBaseY = _dpiY/mapInfo.CellSize;
         // create a gray pen of width 2
     }
-    
+
+    private void OnLoad(object sender, EventArgs e)
+    {
+        if (Screen.AllScreens.Length > 1)
+        {
+            var secondary = Screen.AllScreens.First(x => !x.Primary);
+            Location = secondary.Bounds.Location;
+            //Bounds = secondary.Bounds;
+        }
+    }
+
     protected override void OnPaintBackground(PaintEventArgs e)
     {
         // do nothing

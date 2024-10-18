@@ -13,4 +13,6 @@ public class MapInfo
     public float CellSize = 48;
     [DataMember]
     public string FileName = null;
+
+    public Point Center { get; set; } = new Point(100, 100);
 }
