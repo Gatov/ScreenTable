@@ -1,6 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenTable", "ScreenTable\ScreenTable.csproj", "{98DF32DC-AD39-409F-9C19-022CD148809B}"
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.35013.160
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ScreenTable", "ScreenTable\ScreenTable.csproj", "{98DF32DC-AD39-409F-9C19-022CD148809B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenMap", "ScreenMap\ScreenMap.csproj", "{62A4F88A-D2D3-4C46-B81D-0F4EBD04E124}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -12,5 +17,15 @@ Global
 		{98DF32DC-AD39-409F-9C19-022CD148809B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{98DF32DC-AD39-409F-9C19-022CD148809B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{98DF32DC-AD39-409F-9C19-022CD148809B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{62A4F88A-D2D3-4C46-B81D-0F4EBD04E124}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{62A4F88A-D2D3-4C46-B81D-0F4EBD04E124}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{62A4F88A-D2D3-4C46-B81D-0F4EBD04E124}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{62A4F88A-D2D3-4C46-B81D-0F4EBD04E124}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {66E2401B-D007-4C31-B040-75C648225657}
 	EndGlobalSection
 EndGlobal
