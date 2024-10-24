@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using DevExpress.Utils.Drawing;
 
 namespace ScreenMap.Logic;
 
@@ -12,4 +13,5 @@ public interface ITool
     void OnMouseWheel(int ticks, Keys modifiers);
     void OnPaint(Graphics graphics);
     event Action<RectangleF> RequiresRepaint;
+    bool DrawFog { get; }
 }

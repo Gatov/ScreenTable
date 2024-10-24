@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using DevExpress.Utils.Drawing;
 using ScreenMap.Logic;
 
 namespace ScreenTable.Tools;
@@ -86,6 +87,7 @@ public class ToolCalibrate : ITool
     }
 
     public event Action<RectangleF> RequiresRepaint;
+    public bool DrawFog => false;
 
     public void OnPaint(Graphics graphics)
     {

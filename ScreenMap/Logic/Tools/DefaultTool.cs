@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using DevExpress.Utils.Drawing;
 
 namespace ScreenMap.Logic.Tools;
 
@@ -104,4 +105,5 @@ public class DefaultTool : ITool
         RequiresRepaint?.Invoke(rc);
     }
     public event Action<RectangleF> RequiresRepaint;
+    public bool DrawFog => true;
 }

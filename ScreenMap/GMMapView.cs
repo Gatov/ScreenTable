@@ -107,13 +107,12 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         unscaledRect.Inflate(1, 1);
         g.SetClip(unscaledRect);
         //bool drawFog = _mode != Mode.Calibrate;
-        bool drawFog = true;
-        _map.Draw(g, unscaledRect, drawFog);
+        _map.Draw(g, unscaledRect, _currentTool.DrawFog);
         //TODO: g.DrawRectangle(Pens.Aquamarine, Rectangle.Ceiling(_playerView.GetViewAreaInOriginal()));
         sw.Stop();
         System.Diagnostics.Debug.WriteLine($"GMControl.Paint: {sw.Elapsed} - {unscaledRect}");
-        //if (_currentTool != null)
-        //_currentTool.OnPaint(g);
+        if (_currentTool != null)
+            _currentTool.OnPaint(g.Graphics);
     }
     private void OnDragDrop(object sender, DragEventArgs e)
     {
@@ -176,7 +175,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     }
     
     
-    private void OnMouseDown(object? sender, MouseEventArgs e)
+    private void OnMouseDown(object sender, MouseEventArgs e)
     {
         if(_map == null) return;
         var unscaledPoint = TranslateToUnscaledPoint(e.Location);
@@ -210,6 +209,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
             _currentTool = _toolCalibrate;
         else
             _currentTool = _defaultTool;
+        Invalidate();
     }
 
 }
