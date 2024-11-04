@@ -8,6 +8,7 @@ namespace ScreenTable.Tools;
 
 public class ToolCalibrate : ITool
 {
+    private readonly GMMap _map;
     //private MapInfo _doc;
 
 
@@ -19,9 +20,10 @@ public class ToolCalibrate : ITool
     private bool _inSelection = false;
     private float _calibrationCells = 8;
 
-    public ToolCalibrate(MapInfo doc)
+    public ToolCalibrate(GMMap map)
     {
-        _mapInfo = doc;
+        _map = map;
+        _mapInfo = map.Info;
     }
 
     public void OnMouseDown(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
@@ -37,17 +39,14 @@ public class ToolCalibrate : ITool
 
     public void OnMouseUp(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
-        //if (modifiers.HasFlag(Keys.Shift))
-        {
-            _calibrationCurrent = unscaledPos;
-            RequiresRepaint?.Invoke(RectangleF.Empty); // full repaint
-            _inSelection = false;
-        }
+        _calibrationCurrent = unscaledPos;
+        RequiresRepaint?.Invoke(RectangleF.Empty); // full repaint
+        _inSelection = false;
     }
 
     public void OnMouseMove(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
-        if (/*modifiers.HasFlag(Keys.Shift) && */_inSelection)
+        if (_inSelection)
         {
             _calibrationCurrent = unscaledPos;
             
@@ -83,6 +82,7 @@ public class ToolCalibrate : ITool
             _mapInfo.OffsetX = (int)(_calibrationStart.X % _calibrationCellSize);
             _mapInfo.OffsetY = (int)(_calibrationStart.Y % _calibrationCellSize);
             _mapInfo.CellSize = _calibrationCellSize;
+            _map.UpdateInfo();
         }
     }
 

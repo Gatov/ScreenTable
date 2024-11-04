@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using DevExpress.Utils.Drawing;
 using Newtonsoft.Json;
+using ScreenMap.Logic.Messages;
 
 namespace ScreenMap.Logic;
 
@@ -21,6 +22,7 @@ public class GMMap : IDisposable
     private float _scale;
     public static float MaxWidth = 1920;
     public static float MaxHeight = 1080;
+    public event Action<IMessage> OnMessage;
 
     public Image OriginalImage => _originalImage;
 
@@ -35,9 +37,13 @@ public class GMMap : IDisposable
     {
         _mapInfo = LoadMapInfo(filename);
         var newMap = Image.FromFile(_mapInfo.FileName);
+        var data = File.ReadAllBytes(_mapInfo.FileName);
+        OnMessage?.Invoke(new NewImageMessage(Path.GetFileNameWithoutExtension(_mapInfo.FileName), data));
         _originalImage = newMap;
         _scale = Math.Min(1,Math.Min(MaxWidth / newMap.Width, MaxHeight / newMap.Height));
         _scaledImage = new Bitmap(newMap, (int)Math.Ceiling(newMap.Width*_scale), (int)Math.Ceiling(newMap.Height*_scale));
+        UpdateInfo();
+        
         InitializeGmOverlay(newMap);
         
 
@@ -79,23 +85,25 @@ public class GMMap : IDisposable
         _scaledGmOverlay?.Dispose();
     }
 
-    public void RevealAt(PointF unscaledPoint, float brushSize)
+    public void RevealAt(PointF unscaledPoint, float brushSize, bool reveal)
     {
         var rect = new RectangleF(unscaledPoint.X - brushSize / 2f, unscaledPoint.Y - brushSize / 2f, brushSize, brushSize);
         using (Graphics g = Graphics.FromImage(_scaledGmOverlay))
         {
-            g.CompositingMode = CompositingMode.SourceCopy;
             g.ScaleTransform(_scale, _scale);
+            g.CompositingMode = CompositingMode.SourceCopy;
             //g.ScaleTransform(1/_currentGmZoom, 1/_currentGmZoom);
             // create a radial brush with alpha increasing towards the center
-
-            using (var brush = new SolidBrush(Color.FromArgb(0, Color.Aqua)))
+            var alpha = reveal ? 0 : 200;
+            using (var brush = new SolidBrush(Color.FromArgb(alpha, Color.Gray)))
             {
                 //set anti-aliasing
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.FillEllipse(brush, rect);
             }
         }
+        OnMessage?.Invoke(new RevealAtMessage(unscaledPoint, brushSize, reveal));
+        
         OnRectUpdated?.Invoke(rect);
     }
 
@@ -114,5 +122,10 @@ public class GMMap : IDisposable
     {
         // TODO:
         //throw new NotImplementedException();
+    }
+
+    public void UpdateInfo()
+    {
+        OnMessage?.Invoke(new GridDataMessage(_mapInfo.OffsetX, _mapInfo.OffsetY, _mapInfo.CellSize));       
     }
 }

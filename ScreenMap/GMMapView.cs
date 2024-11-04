@@ -97,7 +97,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         // {
         var g = e.Cache;
         Rectangle clipRect = e.ClipRectangle;
-        g.FillRectangle(Brushes.Aqua, new Rectangle(10, 10, 300, 300));
+        //g.FillRectangle(Brushes.Aqua, new Rectangle(10, 10, 300, 300));
         if (_map == null) return;
         g.ScaleTransform(_currentGmZoom, _currentGmZoom);
 
@@ -128,6 +128,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
                     {
                         UseWaitCursor = true;
                         _map = new GMMap(fileDrop);
+                        this.Size = _map.OriginalImage.Size;
                         InitializeTools();
                         Invalidate();
                     }
@@ -147,7 +148,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     private void InitializeTools()
     {
 
-        _toolCalibrate = new ToolCalibrate(_map.Info);
+        _toolCalibrate = new ToolCalibrate(_map);
         _toolCalibrate.RequiresRepaint += CurrentToolOnRequiresRepaint;
         _currentTool = _defaultTool = new DefaultTool(_map, this);
         _defaultTool.RequiresRepaint+= CurrentToolOnRequiresRepaint;
@@ -184,23 +185,6 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
             _currentTool.OnMouseDown(unscaledPoint, e.Button, ModifierKeys);
             return;
         }
-
-        if (e.Button == MouseButtons.Left)
-        {
-            // check if Shift is pressed
-            if (ModifierKeys == Keys.None)
-            {
-                //SetMode(Mode.Reveal);
-                _map.RevealAt(unscaledPoint, BrushSize);
-            }
-            
-        }
-        /*else if(e.Button == MouseButtons.Middle)
-        {
-            //SetMode(Mode.Pan);
-            _playerView.SetCenter(unscaledPoint);
-            Invalidate();
-        }*/
     }
 
     public void CalibrationMode(bool calibrate)

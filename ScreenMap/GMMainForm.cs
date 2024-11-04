@@ -1,25 +1,17 @@
-﻿using DevExpress.LookAndFeel;
-using DevExpress.Utils.Drawing;
-using DevExpress.XtraEditors;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-
-namespace ScreenMap
+﻿namespace ScreenMap
 {
     public partial class GMMainForm : DevExpress.XtraEditors.XtraForm
     {
         enum Mode { Normal, Calibrate };
         Mode _currentMode;
+        private readonly PlayersForm _playerView;
+
         public GMMainForm()
         {
             InitializeComponent();
+            // Add scrollbars tho the form so user can scroll to see all controls
+            _playerView = new PlayersForm();
+            _playerView.Show();
         }
 
         private void barCheckItem_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)

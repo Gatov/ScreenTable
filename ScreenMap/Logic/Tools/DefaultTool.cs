@@ -24,8 +24,8 @@ public class DefaultTool : ITool
     }
     public void OnMouseDown(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
-        if(modifiers == Keys.None && buttons == MouseButtons.Left)
-            RevealAt(unscaledPos);
+        if(buttons == MouseButtons.Left)
+            RevealAt(unscaledPos, modifiers);
         else if(buttons == MouseButtons.Middle && modifiers == Keys.None)
         {
             _mapInfo.Center = Point.Round(unscaledPos);
@@ -33,22 +33,29 @@ public class DefaultTool : ITool
         }
     }
 
-    private void RevealAt(PointF unscaledPos)
+    private void RevealAt(PointF unscaledPos, Keys modififiers)
     {
-        _gmMap.RevealAt(Point.Round(unscaledPos), BrushSize);
+        bool reveal;
+        switch (modififiers)
+        {
+            case Keys.None: { reveal = true; break; }
+            case Keys.Shift: { reveal = false; break; }
+            default: return; // not a recognized key
+        }
+        _gmMap.RevealAt(Point.Round(unscaledPos), BrushSize, reveal);
         _previousReveal = unscaledPos;
     }
 
     public void OnMouseUp(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
-        if(modifiers == Keys.None && buttons == MouseButtons.Left && unscaledPos!= _previousReveal)
-            RevealAt(unscaledPos);
+        if(buttons == MouseButtons.Left && unscaledPos!= _previousReveal)
+            RevealAt(unscaledPos, modifiers);
     }
 
     public void OnMouseMove(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
         if (buttons == MouseButtons.Left && modifiers == Keys.None)
-            RevealingMove(unscaledPos);
+            RevealingMove(unscaledPos, modifiers);
     }
 
     public void OnMouseWheel(int ticks, Keys modifiers)
@@ -68,11 +75,11 @@ public class DefaultTool : ITool
     {
         //throw new NotImplementedException();
     }
-    private void RevealingMove(PointF unscaledPoint)
+    private void RevealingMove(PointF unscaledPoint, Keys modifiers)
     {
         if (_previousReveal.IsEmpty )
         {
-            RevealAt(unscaledPoint);
+            RevealAt(unscaledPoint, modifiers);
             return;
         }
 
@@ -90,7 +97,7 @@ public class DefaultTool : ITool
             var newUnscaled = new Point((int)(prevLoc.X + progress * cX), (int)(prevLoc.Y + progress * cY));
             try
             {
-                RevealAt(newUnscaled);
+                RevealAt(newUnscaled, modifiers);
                 //System.Diagnostics.Debug.WriteLine($"{newUnscaled}, {distance}");
             }
             catch (Exception exception)

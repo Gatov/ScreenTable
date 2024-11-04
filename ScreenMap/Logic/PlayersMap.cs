@@ -16,8 +16,9 @@ public class PlayersMap : IDisposable
     private TextureBrush _semiRevealBrush;
     public event Action<RectangleF> OnRectUpdated;
     private MapInfo _mapInfo;
+    private SolidBrush _hideBrush;
 
-    
+
     public PlayersMap(Stream mapStream)
     {
         _originalMap = Image.FromStream(mapStream);
@@ -33,7 +34,7 @@ public class PlayersMap : IDisposable
         g.FillRectangle(brush, 0,0, _playersImage.Width, _playersImage.Height);
     }
     
-    public void RevealAt(PointF unscaledPoint, float brushSize)
+    public void RevealAt(PointF unscaledPoint, float brushSize, bool revealAtReveal)
     {
         var rect = new RectangleF(unscaledPoint.X - brushSize / 2f, unscaledPoint.Y - brushSize / 2f, brushSize, brushSize);
         // Reveal at player's view
@@ -44,8 +45,15 @@ public class PlayersMap : IDisposable
             // set the _revealBrush to draw a portion of original image in place
             var bigger = rect;
             bigger.Inflate(0.2f * brushSize, 0.2f * brushSize);
-            g.FillEllipse(_semiRevealBrush, bigger);
-            g.FillEllipse(_revealBrush, rect);
+            if (revealAtReveal)
+            {
+                g.FillEllipse(_semiRevealBrush, bigger);
+                g.FillEllipse(_revealBrush, rect);
+            }
+            else
+            {
+                g.FillEllipse(_hideBrush, bigger);
+            }
         }
         OnRectUpdated?.Invoke(rect);
     }
@@ -54,6 +62,7 @@ public class PlayersMap : IDisposable
     {
         _revealBrush = FogUtil.CreateSemitransparentBrushFromImage(newMap, 0.8f);
         _semiRevealBrush = FogUtil.CreateSemitransparentBrushFromImage(newMap, 0.2f);
+        _hideBrush = new SolidBrush( Color.CadetBlue);
     }
 
     public void Dispose()

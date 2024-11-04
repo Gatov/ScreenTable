@@ -1,4 +1,6 @@
-﻿namespace ScreenMap
+﻿using ScreenMap.Controls;
+
+namespace ScreenMap
 {
     partial class GMMainForm
     {
@@ -33,22 +35,25 @@
             gmMapView1 = new GmMapView();
             barManager1 = new DevExpress.XtraBars.BarManager(components);
             bar1 = new DevExpress.XtraBars.Bar();
+            barCheckItem = new DevExpress.XtraBars.BarCheckItem();
             bar3 = new DevExpress.XtraBars.Bar();
             barDockControlTop = new DevExpress.XtraBars.BarDockControl();
             barDockControlBottom = new DevExpress.XtraBars.BarDockControl();
             barDockControlLeft = new DevExpress.XtraBars.BarDockControl();
             barDockControlRight = new DevExpress.XtraBars.BarDockControl();
-            barCheckItem = new DevExpress.XtraBars.BarCheckItem();
+            xtraScrollableControl1 = new ScrollableContainer();
             ((System.ComponentModel.ISupportInitialize)barManager1).BeginInit();
+            xtraScrollableControl1.SuspendLayout();
             SuspendLayout();
             // 
             // gmMapView1
             // 
             gmMapView1.AllowDrop = true;
-            gmMapView1.Dock = System.Windows.Forms.DockStyle.Fill;
-            gmMapView1.Location = new System.Drawing.Point(0, 24);
+            gmMapView1.Appearance.BackColor = System.Drawing.SystemColors.Info;
+            gmMapView1.Appearance.Options.UseBackColor = true;
+            gmMapView1.Location = new System.Drawing.Point(0, 0);
             gmMapView1.Name = "gmMapView1";
-            gmMapView1.Size = new System.Drawing.Size(978, 358);
+            gmMapView1.Size = new System.Drawing.Size(933, 352);
             gmMapView1.TabIndex = 0;
             gmMapView1.ZoomLevel = 1F;
             // 
@@ -72,6 +77,14 @@
             bar1.DockStyle = DevExpress.XtraBars.BarDockStyle.Top;
             bar1.LinksPersistInfo.AddRange(new DevExpress.XtraBars.LinkPersistInfo[] { new DevExpress.XtraBars.LinkPersistInfo(barCheckItem) });
             bar1.Text = "Tools";
+            // 
+            // barCheckItem
+            // 
+            barCheckItem.Caption = "barCheckItem1";
+            barCheckItem.Id = 1;
+            barCheckItem.ImageOptions.Image = (System.Drawing.Image)resources.GetObject("barCheckItem.ImageOptions.Image");
+            barCheckItem.Name = "barCheckItem";
+            barCheckItem.CheckedChanged += barCheckItem_CheckedChanged;
             // 
             // bar3
             // 
@@ -117,20 +130,21 @@
             barDockControlRight.Manager = barManager1;
             barDockControlRight.Size = new System.Drawing.Size(0, 358);
             // 
-            // barCheckItem
+            // xtraScrollableControl1
             // 
-            barCheckItem.Caption = "barCheckItem1";
-            barCheckItem.Id = 1;
-            barCheckItem.ImageOptions.Image = (System.Drawing.Image)resources.GetObject("barCheckItem1.ImageOptions.Image");
-            barCheckItem.Name = "barCheckItem";
-            barCheckItem.CheckedChanged += barCheckItem_CheckedChanged;
+            xtraScrollableControl1.Controls.Add(gmMapView1);
+            xtraScrollableControl1.Dock = System.Windows.Forms.DockStyle.Fill;
+            xtraScrollableControl1.Location = new System.Drawing.Point(0, 24);
+            xtraScrollableControl1.Name = "xtraScrollableControl1";
+            xtraScrollableControl1.Size = new System.Drawing.Size(978, 358);
+            xtraScrollableControl1.TabIndex = 5;
             // 
             // GMMainForm
             // 
             AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             ClientSize = new System.Drawing.Size(978, 402);
-            Controls.Add(gmMapView1);
+            Controls.Add(xtraScrollableControl1);
             Controls.Add(barDockControlLeft);
             Controls.Add(barDockControlRight);
             Controls.Add(barDockControlBottom);
@@ -138,6 +152,7 @@
             Name = "GMMainForm";
             Text = "XtraForm1";
             ((System.ComponentModel.ISupportInitialize)barManager1).EndInit();
+            xtraScrollableControl1.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -153,5 +168,6 @@
         private DevExpress.XtraBars.BarDockControl barDockControlLeft;
         private DevExpress.XtraBars.BarDockControl barDockControlRight;
         private DevExpress.XtraBars.BarCheckItem barCheckItem;
+        private DevExpress.XtraEditors.XtraScrollableControl xtraScrollableControl1;
     }
 }
