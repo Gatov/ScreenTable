@@ -1,21 +1,24 @@
-﻿using DevExpress.XtraEditors;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
+﻿using System.Windows.Forms;
+using ScreenMap.Controls;
+using ScreenMap.Logic;
 
 namespace ScreenMap
 {
     public partial class PlayersForm : DevExpress.XtraEditors.XtraForm
     {
-        public PlayersForm()
+        private readonly PlayerController _playerController;
+        private readonly PlayersMapView _plyersView;
+
+        public PlayersForm(PlayerController playerController)
         {
+            
+            _playerController = playerController;
             InitializeComponent();
+            _plyersView = new PlayersMapView();
+            _plyersView.Dock = DockStyle.Fill;
+            Controls.Add(_plyersView);
+            
+            playerController.SetView(_plyersView);
         }
     }
 }

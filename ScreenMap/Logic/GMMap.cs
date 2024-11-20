@@ -14,8 +14,8 @@ namespace ScreenMap.Logic;
 /// </summary>
 public class GMMap : IDisposable
 {
-    private readonly Image _originalImage;
-    private readonly Bitmap _scaledImage;
+    private Image _originalImage;
+    private Bitmap _scaledImage;
     private Bitmap _scaledGmOverlay;
     private MapInfo _mapInfo;
     
@@ -33,7 +33,12 @@ public class GMMap : IDisposable
     }
 
     public event Action<RectangleF> OnRectUpdated;
-    public GMMap(string filename)
+
+    public GMMap()
+    {
+        
+    }
+    public void LoadMap(string filename)
     {
         _mapInfo = LoadMapInfo(filename);
         var newMap = Image.FromFile(_mapInfo.FileName);
@@ -43,11 +48,9 @@ public class GMMap : IDisposable
         _scale = Math.Min(1,Math.Min(MaxWidth / newMap.Width, MaxHeight / newMap.Height));
         _scaledImage = new Bitmap(newMap, (int)Math.Ceiling(newMap.Width*_scale), (int)Math.Ceiling(newMap.Height*_scale));
         UpdateInfo();
-        
         InitializeGmOverlay(newMap);
-        
-
     }
+    
     
     private static MapInfo LoadMapInfo(string fileDrop)
     {
@@ -111,6 +114,7 @@ public class GMMap : IDisposable
 
     public void Draw(GraphicsCache g, Rectangle unscaledRect, bool drawFog)
     {
+        if (_scaledImage == null) return;
         var scaledRect = RectangleF.FromLTRB(unscaledRect.Left * _scale, unscaledRect.Top * _scale,
             unscaledRect.Right * _scale, unscaledRect.Bottom * _scale);
         g.DrawImage(_scaledImage, unscaledRect, scaledRect, GraphicsUnit.Pixel);
@@ -127,5 +131,10 @@ public class GMMap : IDisposable
     public void UpdateInfo()
     {
         OnMessage?.Invoke(new GridDataMessage(_mapInfo.OffsetX, _mapInfo.OffsetY, _mapInfo.CellSize));       
+    }
+
+    public void CenterAt(PointF unscaledPos)
+    {
+        OnMessage?.Invoke(new CenterAtMessage(){Location = unscaledPos});
     }
 }

@@ -1,18 +1,18 @@
-﻿using ScreenMap.Logic;
-using ScreenTable.Tools;
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 using DevExpress.Utils;
+using ScreenMap.Logic;
 using ScreenMap.Logic.Tools;
+using ScreenTable.Tools;
 
-namespace ScreenMap;
+namespace ScreenMap.Controls;
 
 public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomable
 {
 
-    private GMMap _map;
+    private readonly GMMap _map;
 
     private float _currentGmZoom = 1;
     // tools
@@ -32,6 +32,9 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     }
 
     private int BrushSize =>(int) ((_map.Info?.CellSize??20) * 4);
+
+    public GMMap Map => _map;
+
     public GmMapView()
     {
         InitializeComponent();
@@ -50,6 +53,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
                 args.Effect = DragDropEffects.Copy;
         };
         AllowDrop = true;
+        _map = new GMMap();
         DragDrop += OnDragDrop;
     }
 
@@ -91,6 +95,8 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     }
     private void OnPaintEx(object sender, XtraPaintEventArgs e)
     {
+        if(_map == null)
+            return;
         //     throw new NotImplementedException();
         // }
         // protected override void OnDirectXPaint(GraphicsCache cache, UserLookAndFeel activeLookAndFeel)
@@ -106,8 +112,8 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
             new Size(TranslateToUnscaledPoint(new Point(clipRect.Size))));
         unscaledRect.Inflate(1, 1);
         g.SetClip(unscaledRect);
-        //bool drawFog = _mode != Mode.Calibrate;
-        _map.Draw(g, unscaledRect, _currentTool.DrawFog);
+        bool drawFog = _currentTool?.DrawFog !=false;
+        _map.Draw(g, unscaledRect, drawFog);
         //TODO: g.DrawRectangle(Pens.Aquamarine, Rectangle.Ceiling(_playerView.GetViewAreaInOriginal()));
         sw.Stop();
         System.Diagnostics.Debug.WriteLine($"GMControl.Paint: {sw.Elapsed} - {unscaledRect}");
@@ -123,11 +129,11 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
                 var fileDrop = data.GetFileDropList()[0];
                 if (fileDrop != null)
                 {
-                    _map?.Dispose();
                     try
                     {
                         UseWaitCursor = true;
-                        _map = new GMMap(fileDrop);
+                        _map.LoadMap(fileDrop);
+                        
                         this.Size = _map.OriginalImage.Size;
                         InitializeTools();
                         Invalidate();

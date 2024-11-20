@@ -3,28 +3,32 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
+using ScreenMap.Logic.Messages;
 
 namespace ScreenMap.Logic;
 
 public class PlayersMap : IDisposable
 {
-    
-    public Image PlayersImage => _playersImage;
     private Bitmap _playersImage;
-    private readonly Image _originalMap;
+    private Image _originalMap;
     private TextureBrush _revealBrush;
     private TextureBrush _semiRevealBrush;
     public event Action<RectangleF> OnRectUpdated;
-    private MapInfo _mapInfo;
+    public event Action<IMessage> OnMessage;
+    private MapInfo _mapInfo = new MapInfo();
     private SolidBrush _hideBrush;
+    private float _zoomFactor = 1; 
+    private bool _updateRect = false;
+    private PointF _centerUnscaled = new PointF(200,200);
+    private readonly Color _gridColor = Color.FromArgb(128,Color.Yellow);
 
 
-    public PlayersMap(Stream mapStream)
+    public void Initialize(Stream mapStream)
     {
         _originalMap = Image.FromStream(mapStream);
         InitializePlayerImage(_originalMap);
         InitializeBrushes(_originalMap);
-        
+        OnRectUpdated?.Invoke(RectangleF.Empty);
     }
     private void InitializePlayerImage(Image newMap)
     {
@@ -57,7 +61,42 @@ public class PlayersMap : IDisposable
         }
         OnRectUpdated?.Invoke(rect);
     }
-    
+
+    public void OnPaint(Graphics g, SizeF clientSize)
+    {
+        var zoomX = g.DpiX/_mapInfo.CellSize * _zoomFactor;
+        var zoomY = g.DpiY/_mapInfo.CellSize * _zoomFactor;
+        //Rectangle clipRect = g.ClipBounds; 
+        
+        var rectInOriginal = GetViewAreaInOriginal(clientSize, zoomX, zoomY); 
+        g.ScaleTransform(zoomX, zoomY);
+        g.TranslateTransform(-rectInOriginal.X, -rectInOriginal.Y);
+        
+        
+        g.CompositingMode = CompositingMode.SourceOver;
+        g.CompositingQuality = CompositingQuality.HighQuality;
+        g.InterpolationMode = InterpolationMode.NearestNeighbor;
+        g.DrawImage(_playersImage, rectInOriginal, rectInOriginal, GraphicsUnit.Pixel);
+        using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / zoomY)))
+        {
+            for (float i = _mapInfo.OffsetX; i < rectInOriginal.X + rectInOriginal.Width; i += _mapInfo.CellSize)
+                g.DrawLine(pen, i, rectInOriginal.Y, i, rectInOriginal.Y + rectInOriginal.Height);
+        }
+
+        using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / zoomX)))
+        {
+            for (float i = _mapInfo.OffsetY; i < rectInOriginal.Y + rectInOriginal.Height; i += _mapInfo.CellSize)
+                g.DrawLine(pen, rectInOriginal.X, i, rectInOriginal.X + rectInOriginal.Width, i);
+        }
+    }
+
+    private RectangleF GetViewAreaInOriginal(SizeF clientSize, float zoomX, float zoomY)
+    {
+        var width = clientSize.Width/zoomX;
+        var height = clientSize.Height/zoomY;
+        return new RectangleF(_centerUnscaled.X - width / 2, _centerUnscaled.Y - height / 2, width, height);
+    }
+
     private void InitializeBrushes(Image newMap)
     {
         _revealBrush = FogUtil.CreateSemitransparentBrushFromImage(newMap, 0.8f);
@@ -68,5 +107,23 @@ public class PlayersMap : IDisposable
     public void Dispose()
     {
         _playersImage?.Dispose();
+    }
+
+    public void CenterAt(PointF centerAtLocation)
+    {
+        _centerUnscaled = centerAtLocation;
+        OnRectUpdated?.Invoke(RectangleF.Empty);
+    }
+
+    public void UpdateVisibleArea(int clientSizeWidth, int clientSizeHeight)
+    {
+        
+    }
+
+    public void UpdateGrid(GridDataMessage gridData)
+    {
+        _mapInfo.CellSize = gridData.CellSize;
+        _mapInfo.OffsetX = gridData.OffsetX;
+        _mapInfo.OffsetY = _mapInfo.OffsetY;
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace ScreenMap
+﻿namespace ScreenMap.Controls
 {
     partial class GmMapView
     {

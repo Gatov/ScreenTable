@@ -1,4 +1,6 @@
-﻿namespace ScreenMap
+﻿using ScreenMap.Logic;
+
+namespace ScreenMap
 {
     public partial class GMMainForm : DevExpress.XtraEditors.XtraForm
     {
@@ -10,8 +12,12 @@
         {
             InitializeComponent();
             // Add scrollbars tho the form so user can scroll to see all controls
-            _playerView = new PlayersForm();
+            PlayerController controller = new PlayerController();
+            _playerView = new PlayersForm(controller);
+            
             _playerView.Show();
+            gmMapView1.Map.OnMessage += controller.ProcessMessage;
+            //controller.OnMessage += gmMapView1.
         }
 
         private void barCheckItem_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)

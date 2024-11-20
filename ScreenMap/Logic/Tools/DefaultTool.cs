@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using DevExpress.Utils.Drawing;
+using ScreenMap.Controls;
 
 namespace ScreenMap.Logic.Tools;
 
@@ -30,6 +31,7 @@ public class DefaultTool : ITool
         {
             _mapInfo.Center = Point.Round(unscaledPos);
             RequiresRepaint?.Invoke(RectangleF.Empty);
+            _gmMap.CenterAt(unscaledPos);
         }
     }
 
