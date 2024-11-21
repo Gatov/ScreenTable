@@ -8,15 +8,16 @@ namespace ScreenMap.Logic.Tools;
 
 public class DefaultTool : ITool
 {
-    private readonly GMMap _gmMap;
+    private readonly GmMap _gmMap;
     private readonly MapInfo _mapInfo;
     private readonly IZoomable _view;
     private PointF _previousReveal;
 
-    private int BrushSize =>(int) ((_mapInfo?.CellSize??20) * 4);
+    private int BrushSize =>(int) ((_mapInfo?.CellSize??20) * _brushSizeInCells);
+    private float _brushSizeInCells = 4;
     private double Density => BrushSize/8.0;
     
-    public DefaultTool(GMMap gmMap, IZoomable view)
+    public DefaultTool(GmMap gmMap, IZoomable view)
     {
         _gmMap = gmMap;
         _mapInfo = gmMap.Info;
@@ -56,7 +57,7 @@ public class DefaultTool : ITool
 
     public void OnMouseMove(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
-        if (buttons == MouseButtons.Left && modifiers == Keys.None)
+        if (buttons == MouseButtons.Left)
             RevealingMove(unscaledPos, modifiers);
     }
 
@@ -115,4 +116,9 @@ public class DefaultTool : ITool
     }
     public event Action<RectangleF> RequiresRepaint;
     public bool DrawFog => true;
+
+    public void SetBrushSize(float sizeInCells)
+    {
+        _brushSizeInCells = sizeInCells;
+    }
 }

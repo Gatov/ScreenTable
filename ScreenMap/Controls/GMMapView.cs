@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 using DevExpress.Utils;
+using DevExpress.Utils.Extensions;
 using ScreenMap.Logic;
 using ScreenMap.Logic.Tools;
 using ScreenTable.Tools;
@@ -12,7 +13,7 @@ namespace ScreenMap.Controls;
 public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomable
 {
 
-    private readonly GMMap _map;
+    private readonly GmMap _map;
 
     private float _currentGmZoom = 1;
     // tools
@@ -27,13 +28,12 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         set
         {
             _currentGmZoom = value;
+            if (_map != null)
+                Size = _map.Size.Scale(_currentGmZoom);
             Invalidate();
         }
     }
-
-    private int BrushSize =>(int) ((_map.Info?.CellSize??20) * 4);
-
-    public GMMap Map => _map;
+    public GmMap Map => _map;
 
     public GmMapView()
     {
@@ -53,7 +53,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
                 args.Effect = DragDropEffects.Copy;
         };
         AllowDrop = true;
-        _map = new GMMap();
+        _map = new GmMap();
         DragDrop += OnDragDrop;
     }
 
@@ -134,7 +134,8 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
                         UseWaitCursor = true;
                         _map.LoadMap(fileDrop);
                         
-                        this.Size = _map.OriginalImage.Size;
+                        //this.Size = _map.OriginalImage.Size;
+                        ZoomLevel = 1; // reset
                         InitializeTools();
                         Invalidate();
                     }
@@ -202,6 +203,15 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         Invalidate();
     }
 
+    public void SaveFile()
+    {
+        _map.SaveMapInfo();
+    }
+
+    public void SetBrushSize(float brushSizeInCells)
+    {
+        _defaultTool.SetBrushSize(brushSizeInCells);
+    }
 }
 
 public interface IZoomable

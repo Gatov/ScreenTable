@@ -36,6 +36,9 @@ public class PlayerController
             case  GridDataMessage gridData:
                 _playersMap.UpdateGrid(gridData);
                 break;
+            case  ZoomInMessage zoomMessage:
+                _playersMap.UpdateZoom(zoomMessage);
+                break;
 
             case CenterAtMessage centerAt: _playersMap.CenterAt(centerAt.Location);
                 break;

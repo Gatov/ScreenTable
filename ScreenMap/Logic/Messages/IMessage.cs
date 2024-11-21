@@ -39,7 +39,7 @@ public class CenterAtMessage : IMessage
 
 public class ZoomInMessage : IMessage
 {
-    private int Ticks { get; set; }
+    public int Ticks { get; set; }
 }
 
 public class GridDataMessage : IMessage
@@ -60,3 +60,4 @@ public class ClientRectangleMessage : IMessage
 {
     public RectangleF Rectangle { get; set; }
 }
+

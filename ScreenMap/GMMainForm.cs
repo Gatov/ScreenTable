@@ -14,9 +14,10 @@ namespace ScreenMap
             // Add scrollbars tho the form so user can scroll to see all controls
             PlayerController controller = new PlayerController();
             _playerView = new PlayersForm(controller);
-            
+
             _playerView.Show();
             gmMapView1.Map.OnMessage += controller.ProcessMessage;
+            controller.OnMessage += gmMapView1.Map.ProcessMessage;
             //controller.OnMessage += gmMapView1.
         }
 
@@ -26,6 +27,17 @@ namespace ScreenMap
 
             gmMapView1.CalibrationMode(_currentMode == Mode.Calibrate);
             barCheckItem.Checked = _currentMode == Mode.Calibrate;
+        }
+
+        private void barButtonItemSave_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        {
+            gmMapView1.SaveFile();
+        }
+
+        private void barListItemBrushes_ListItemClick(object sender, DevExpress.XtraBars.ListItemClickEventArgs e)
+        {
+            var str = barListItemBrushes.Strings[e.Index];
+            gmMapView1.SetBrushSize(float.Parse(str));
         }
     }
 }

@@ -8,7 +8,7 @@ namespace ScreenTable.Tools;
 
 public class ToolCalibrate : ITool
 {
-    private readonly GMMap _map;
+    private readonly GmMap _map;
     //private MapInfo _doc;
 
 
@@ -20,7 +20,7 @@ public class ToolCalibrate : ITool
     private bool _inSelection = false;
     private float _calibrationCells = 8;
 
-    public ToolCalibrate(GMMap map)
+    public ToolCalibrate(GmMap map)
     {
         _map = map;
         _mapInfo = map.Info;
