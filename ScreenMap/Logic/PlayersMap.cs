@@ -97,6 +97,11 @@ public class PlayersMap : IDisposable
         g.CompositingQuality = CompositingQuality.HighQuality;
         g.InterpolationMode = InterpolationMode.NearestNeighbor;
         g.DrawImage(_playersImage, rectInOriginal, rectInOriginal, GraphicsUnit.Pixel);
+        foreach (var mark in _mapInfo.Marks)
+        {
+            using var brush = new SolidBrush(Color.FromArgb(mark.ArgbColor));
+            g.FillEllipse(brush, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
+        }
         using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / ZoomY)))
         {
             for (float i = _mapInfo.OffsetX; i < rectInOriginal.X + rectInOriginal.Width; i += _mapInfo.CellSize)
@@ -108,6 +113,7 @@ public class PlayersMap : IDisposable
             for (float i = _mapInfo.OffsetY; i < rectInOriginal.Y + rectInOriginal.Height; i += _mapInfo.CellSize)
                 g.DrawLine(pen, rectInOriginal.X, i, rectInOriginal.X + rectInOriginal.Width, i);
         }
+        
     }
 
     private RectangleF GetViewAreaInOriginal()
@@ -158,5 +164,32 @@ public class PlayersMap : IDisposable
         _zoomFactor = Math.Max(0.2f, Math.Min(5, _zoomFactor + zoomMessage.Ticks/10F)); // 10%
         NotifyUpdate();
         OnMessage?.Invoke(new ClientRectangleMessage(){Rectangle = GetViewAreaInOriginal()});
+    }
+
+    public void MarkAt(MarkAtMessage markAt)
+    {
+        if (markAt.Radius == 0) // remove
+        {
+            int idx = _mapInfo.Marks.FindLastIndex(x => x.Id == markAt.Id);
+            if (idx >= 0)
+            {
+                var old = _mapInfo.Marks[idx];
+                _mapInfo.Marks.RemoveAt(idx);
+                NotifyUpdate(old.AsPoint.RectByCenter(old.Radius));
+            }
+        }
+        else
+        {
+            var mark = new Mark()
+            {
+                Id = markAt.Id,
+                Radius = markAt.Radius,
+                X = markAt.Location.X,
+                Y = markAt.Location.Y,
+                ArgbColor = markAt.ArgbColor
+            };
+            _mapInfo.Marks.Add(mark);
+            NotifyUpdate(mark.AsPoint.RectByCenter(mark.Radius));
+        }
     }
 }

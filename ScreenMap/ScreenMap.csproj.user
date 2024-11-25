@@ -5,14 +5,8 @@
     <Compile Update="Controls\ScrollableContainer.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Update="GMForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Update="GMMainForm.cs">
       <SubType>Form</SubType>
-    </Compile>
-    <Compile Update="GMMapView.cs">
-      <SubType>UserControl</SubType>
     </Compile>
     <Compile Update="PlayersForm.cs">
       <SubType>Form</SubType>

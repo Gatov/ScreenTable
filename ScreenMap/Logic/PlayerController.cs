@@ -30,6 +30,8 @@ public class PlayerController
         {
             case RevealAtMessage revealAt: _playersMap.RevealAt(revealAt.Location, revealAt.BrushSize, revealAt.Reveal);
                 break; 
+            case MarkAtMessage markAt: _playersMap.MarkAt(markAt);
+                break; 
             case NewImageMessage newImg: using (var ms = new MemoryStream(newImg.Data)) _playersMap.Initialize(ms);
                 _mapView.SetMap(_playersMap);
                 break;

@@ -19,6 +19,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     // tools
     private ToolCalibrate _toolCalibrate;
     private DefaultTool _defaultTool;
+    private MarkingTool _markingTool;
 
     private ITool _currentTool = null;
     
@@ -159,6 +160,10 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         _toolCalibrate.RequiresRepaint += CurrentToolOnRequiresRepaint;
         _currentTool = _defaultTool = new DefaultTool(_map, this);
         _defaultTool.RequiresRepaint+= CurrentToolOnRequiresRepaint;
+        
+        _markingTool = new MarkingTool(_map, this);
+        _markingTool.RequiresRepaint+= CurrentToolOnRequiresRepaint;
+
     }
     private void CurrentToolOnRequiresRepaint(RectangleF obj)
     {
@@ -211,6 +216,16 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     public void SetBrushSize(float brushSizeInCells)
     {
         _defaultTool.SetBrushSize(brushSizeInCells);
+        _markingTool.SetBrushSize(brushSizeInCells);
+    }
+
+    public void MarkingMode(bool mark)
+    {
+        if (mark)
+            _currentTool = _markingTool;
+        else
+            _currentTool = _defaultTool;
+        Invalidate();
     }
 }
 

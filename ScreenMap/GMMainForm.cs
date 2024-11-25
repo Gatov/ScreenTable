@@ -4,7 +4,7 @@ namespace ScreenMap
 {
     public partial class GMMainForm : DevExpress.XtraEditors.XtraForm
     {
-        enum Mode { Normal, Calibrate };
+        enum Mode { Normal, Calibrate, Mark };
         Mode _currentMode;
         private readonly PlayersForm _playerView;
 
@@ -23,8 +23,11 @@ namespace ScreenMap
 
         private void barCheckItem_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
         {
-            _currentMode = (_currentMode == Mode.Normal) ? Mode.Calibrate : Mode.Normal;
-
+            if (_currentMode == Mode.Normal)
+                _currentMode = Mode.Calibrate;
+            else if (_currentMode == Mode.Calibrate)
+                _currentMode = Mode.Normal;
+            else return;
             gmMapView1.CalibrationMode(_currentMode == Mode.Calibrate);
             barCheckItem.Checked = _currentMode == Mode.Calibrate;
         }
@@ -38,6 +41,19 @@ namespace ScreenMap
         {
             var str = barListItemBrushes.Strings[e.Index];
             gmMapView1.SetBrushSize(float.Parse(str));
+        }
+
+        private void barCheckItemMarks_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        {
+            if (_currentMode == Mode.Normal)
+                _currentMode = Mode.Mark;
+            else if (_currentMode == Mode.Mark)
+                _currentMode = Mode.Normal;
+            else return;
+
+            gmMapView1.MarkingMode(_currentMode == Mode.Mark);
+            barCheckItemMarks.Checked = _currentMode == Mode.Mark;
+
         }
     }
 }

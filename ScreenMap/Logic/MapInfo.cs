@@ -17,9 +17,11 @@ public class MapInfo
     public string FileName = null;
 
     [DataMember]
-    public Point Center { get; set; } = new Point(100, 100);
+    public Point Center { get; set; } = new(100, 100);
     [DataMember]
-    public List<Operation> History { get; set; } = new List<Operation>();
+    public List<Operation> History { get; set; } = new();
+
+    public List<Mark> Marks { get; set; } = new();
 }
 
 [DataContract]
@@ -41,4 +43,16 @@ public enum OperationType
     RevealAt,
     [DataMember(Name="H")]
     Hide
+}
+
+[DataContract]
+public class Mark
+{
+    [DataMember] public float X;
+    [DataMember] public float Y;
+    [DataMember] public int ArgbColor;
+    [DataMember] public int Radius;
+    [DataMember] public int Id;
+
+    public PointF AsPoint => new(X, Y);
 }

@@ -21,6 +21,21 @@ public class RevealAtMessage : IMessage
     public bool Reveal { get; set; }
 }
 
+public class MarkAtMessage : IMessage
+{
+    public MarkAtMessage(PointF unscaledPoint, int radius, int color, int id)
+    {
+        Location = unscaledPoint;
+        Radius = radius;
+        ArgbColor = color;
+        Id = id;
+    }
+
+    public PointF Location { get; set; }
+    public int Radius { get; set; }
+    public int ArgbColor { get; set; }
+    public int Id { get; set; }
+}
 public class NewImageMessage : IMessage
 {
     public string Name;

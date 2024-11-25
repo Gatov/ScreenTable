@@ -99,7 +99,6 @@ public class GmMap : IDisposable
     private void InitializeGmOverlay(Image newMap)
     {
         _scaledGmOverlay = new Bitmap( (int)Math.Ceiling(newMap.Width*_scale), (int)Math.Ceiling(newMap.Height*_scale),PixelFormat.Format32bppArgb);
-
         using Graphics g = Graphics.FromImage(_scaledGmOverlay);
         using var brush = new SolidBrush(Color.FromArgb(200, Color.Gray));
         g.FillRectangle(brush, 0, 0, _scaledGmOverlay.Width, _scaledGmOverlay.Height);
@@ -139,7 +138,29 @@ public class GmMap : IDisposable
         OnRectUpdated?.Invoke(rect);
     }
 
-    
+    public void MarkAt(PointF unscaledPoint, float brushSize, int argbColor)
+    {
+        var rect = new RectangleF(unscaledPoint.X - brushSize / 2f, unscaledPoint.Y - brushSize / 2f, brushSize, brushSize);
+        var markId = _mapInfo.Marks.LastOrDefault()?.Id ?? 1; 
+        _mapInfo.Marks.Add(new Mark{X = unscaledPoint.X, Y = unscaledPoint.Y,
+            ArgbColor = argbColor, Radius = (int)brushSize});
+        OnMessage?.Invoke(new MarkAtMessage(unscaledPoint, (int)brushSize, argbColor, markId));
+        OnRectUpdated?.Invoke(rect);
+    }
+    public void RemoveMarkAt(PointF unscaledPos)
+    {
+        for(int i = _mapInfo.Marks.Count-1; i>=0; i-- )
+        {
+            var m = _mapInfo.Marks[i];
+            if (unscaledPos.Distance(m.AsPoint) < m.Radius/2f)
+            {
+                _mapInfo.Marks.RemoveAt(i);
+                OnMessage?.Invoke(new MarkAtMessage(m.AsPoint, 0, m.ArgbColor, m.Id)); // remove it
+                OnRectUpdated?.Invoke(RectangleF.Empty);
+                return;
+            }
+        }
+    }
 
     public void Draw(GraphicsCache g, Rectangle unscaledRect, bool drawFog)
     {
@@ -151,6 +172,13 @@ public class GmMap : IDisposable
         if (_lastSeenClientrect.IsEmpty == false)
         {
             g.DrawRectangle(Pens.Blue, _lastSeenClientrect.Scale(_scale));
+        }
+
+        g.CompositingMode = CompositingMode.SourceOver;
+        foreach (var mark in _mapInfo.Marks)
+        {
+            using var brush = new SolidBrush(Color.FromArgb(mark.ArgbColor));
+            g.FillEllipse(brush, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
         }
     }
 
@@ -185,4 +213,6 @@ public class GmMap : IDisposable
                 break; 
         }
     }
+
+
 }

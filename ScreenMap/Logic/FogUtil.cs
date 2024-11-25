@@ -27,4 +27,16 @@ public static class FogUtil
         float dy = p2.Y - p1.Y;
         return Math.Sqrt(dx * dx + dy * dy);
     }
+
+    public static RectangleF RectByCenter(this PointF center, int size)
+    {
+        return new RectangleF(center.X - size / 2F, center.Y - size / 2F, size, size);
+    }
+
+    public static float Distance(this PointF point1, PointF point2)
+    {
+        float dx = point2.X - point1.X;
+        float dy = point2.Y - point1.Y;
+        return (float)Math.Sqrt(dx * dx + dy * dy);
+    }
 }

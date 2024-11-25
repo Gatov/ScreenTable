@@ -8,12 +8,12 @@ namespace ScreenMap.Logic.Tools;
 
 public class DefaultTool : ITool
 {
-    private readonly GmMap _gmMap;
-    private readonly MapInfo _mapInfo;
+    protected readonly GmMap _gmMap;
+    protected readonly MapInfo _mapInfo;
     private readonly IZoomable _view;
     private PointF _previousReveal;
 
-    private int BrushSize =>(int) ((_mapInfo?.CellSize??20) * _brushSizeInCells);
+    protected int BrushSize =>(int) ((_mapInfo?.CellSize??20) * _brushSizeInCells);
     private float _brushSizeInCells = 4;
     private double Density => BrushSize/8.0;
     
@@ -24,14 +24,14 @@ public class DefaultTool : ITool
         _view = view;
         _gmMap.OnRectUpdated += rc =>RequiresRepaint?.Invoke(rc);
     }
-    public void OnMouseDown(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
+    public virtual void OnMouseDown(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
         if(buttons == MouseButtons.Left)
             RevealAt(unscaledPos, modifiers);
         else if(buttons == MouseButtons.Middle && modifiers == Keys.None)
         {
             _mapInfo.Center = Point.Round(unscaledPos);
-            RequiresRepaint?.Invoke(RectangleF.Empty);
+            //RequiresRepaint?.Invoke(RectangleF.Empty);
             _gmMap.CenterAt(unscaledPos);
         }
     }
@@ -47,21 +47,22 @@ public class DefaultTool : ITool
         }
         _gmMap.RevealAt(Point.Round(unscaledPos), BrushSize, reveal);
         _previousReveal = unscaledPos;
+        RequiresRepaint?.Invoke(unscaledPos.RectByCenter(BrushSize));
     }
 
-    public void OnMouseUp(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
+    public virtual void OnMouseUp(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
         if(buttons == MouseButtons.Left && unscaledPos!= _previousReveal)
             RevealAt(unscaledPos, modifiers);
     }
 
-    public void OnMouseMove(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
+    public virtual void OnMouseMove(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
         if (buttons == MouseButtons.Left)
             RevealingMove(unscaledPos, modifiers);
     }
 
-    public void OnMouseWheel(int ticks, Keys modifiers)
+    public virtual void OnMouseWheel(int ticks, Keys modifiers)
     {
         if (modifiers == Keys.None)
         {
@@ -74,7 +75,7 @@ public class DefaultTool : ITool
         }
     }
 
-    public void OnPaint(Graphics graphics)
+    public virtual void OnPaint(Graphics graphics)
     {
         //throw new NotImplementedException();
     }
@@ -112,8 +113,14 @@ public class DefaultTool : ITool
 
         var rc = new RectangleF(prevLoc, new SizeF(_previousReveal));
         rc.Inflate(BrushSize/2f+1,BrushSize/2f+1);
+        Invalidate(rc);
+    }
+
+    protected void Invalidate(RectangleF rc)
+    {
         RequiresRepaint?.Invoke(rc);
     }
+
     public event Action<RectangleF> RequiresRepaint;
     public bool DrawFog => true;
 
