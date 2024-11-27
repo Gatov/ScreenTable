@@ -8,7 +8,11 @@ namespace ScreenMap.Logic.Tools;
 
 public class MarkingTool : DefaultTool
 {
-    private Color[] _colors = { Color.Chartreuse, Color.Brown, Color.Khaki, Color.Magenta, Color.Red };
+    private Color[] _colors =
+    {
+        Color.Chartreuse, Color.Brown, Color.Khaki, Color.Magenta, Color.Red, Color.Blue, 
+        Color.DimGray
+    };
     private int CurrentBrushIndex = 0;
     private PointF _lastKnownLocation;
 
@@ -39,12 +43,13 @@ public class MarkingTool : DefaultTool
         CurrentBrushIndex = (_colors.Length +CurrentBrushIndex+ shift % _colors.Length) % _colors.Length;
         Invalidate(_lastKnownLocation.RectByCenter(BrushSize));
     }
-    public override void OnPaint(Graphics graphics)
+    public override void OnPaint(Graphics graphics, Point unscaledCursorPoint)
     {
         var old = graphics.CompositingMode;
         graphics.CompositingMode = CompositingMode.SourceOver;
         using var brush = new SolidBrush(Color.FromArgb(30, _colors[CurrentBrushIndex]));
-        graphics.FillEllipse(brush, _lastKnownLocation.RectByCenter(BrushSize));
+        var fp = (PointF)unscaledCursorPoint;
+        graphics.FillEllipse(brush, fp.RectByCenter(BrushSize));
         graphics.CompositingMode = old;
 
     }
@@ -59,4 +64,5 @@ public class MarkingTool : DefaultTool
         _lastKnownLocation = unscaledPos;
         Invalidate(_lastKnownLocation.RectByCenter(BrushSize));
     }
+    public string Hint => "LMB to add mark, Ctrl-MLB to remove, MWheel to change color";
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using DevExpress.Utils.Drawing;
 using ScreenMap.Controls;
@@ -12,10 +13,10 @@ public class DefaultTool : ITool
     protected readonly MapInfo _mapInfo;
     private readonly IZoomable _view;
     private PointF _previousReveal;
-
     protected int BrushSize =>(int) ((_mapInfo?.CellSize??20) * _brushSizeInCells);
     private float _brushSizeInCells = 4;
     private double Density => BrushSize/8.0;
+    private PointF _lastKnownLocation;
     
     public DefaultTool(GmMap gmMap, IZoomable view)
     {
@@ -58,8 +59,12 @@ public class DefaultTool : ITool
 
     public virtual void OnMouseMove(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {
+        Invalidate(_lastKnownLocation.RectByCenter(BrushSize));
+        
         if (buttons == MouseButtons.Left)
             RevealingMove(unscaledPos, modifiers);
+        _lastKnownLocation = unscaledPos;
+        Invalidate(_lastKnownLocation.RectByCenter(BrushSize));
     }
 
     public virtual void OnMouseWheel(int ticks, Keys modifiers)
@@ -75,9 +80,14 @@ public class DefaultTool : ITool
         }
     }
 
-    public virtual void OnPaint(Graphics graphics)
+    public virtual void OnPaint(Graphics graphics, Point unscaledCursorPoint)
     {
-        //throw new NotImplementedException();
+        var old = graphics.CompositingMode;
+        graphics.CompositingMode = CompositingMode.SourceOver;
+        using var pen = new Pen(Color.FromArgb(30, Color.Gold),2);
+        var fp = (PointF)unscaledCursorPoint;
+        graphics.DrawEllipse(pen, fp.RectByCenter(BrushSize));
+        graphics.CompositingMode = old;
     }
     private void RevealingMove(PointF unscaledPoint, Keys modifiers)
     {
@@ -118,14 +128,18 @@ public class DefaultTool : ITool
 
     protected void Invalidate(RectangleF rc)
     {
+        if (rc.IsEmpty == false) 
+            rc.Inflate(1,1);
         RequiresRepaint?.Invoke(rc);
     }
 
     public event Action<RectangleF> RequiresRepaint;
     public bool DrawFog => true;
+    public string Hint => "LMB to reveal, Shift-MLB to hide, MWheel to zoom";
 
     public void SetBrushSize(float sizeInCells)
     {
         _brushSizeInCells = sizeInCells;
+        Invalidate(RectangleF.Empty);
     }
 }

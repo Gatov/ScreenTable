@@ -99,8 +99,11 @@ public class PlayersMap : IDisposable
         g.DrawImage(_playersImage, rectInOriginal, rectInOriginal, GraphicsUnit.Pixel);
         foreach (var mark in _mapInfo.Marks)
         {
-            using var brush = new SolidBrush(Color.FromArgb(mark.ArgbColor));
+            var markColor = Color.FromArgb(mark.ArgbColor);
+            using var brush = new SolidBrush(markColor);
             g.FillEllipse(brush, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
+            using var pen = new Pen(Color.FromArgb(200, markColor), 1f/ZoomX);
+            g.DrawEllipse(pen, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
         }
         using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / ZoomY)))
         {

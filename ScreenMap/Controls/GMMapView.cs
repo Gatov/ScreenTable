@@ -16,12 +16,14 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     private readonly GmMap _map;
 
     private float _currentGmZoom = 1;
+    private float _brushSize = 3;
     // tools
     private ToolCalibrate _toolCalibrate;
     private DefaultTool _defaultTool;
     private MarkingTool _markingTool;
 
     private ITool _currentTool = null;
+    public event Action<ITool> ToolChange; 
     
     public float ZoomLevel
     {
@@ -119,7 +121,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         sw.Stop();
         System.Diagnostics.Debug.WriteLine($"GMControl.Paint: {sw.Elapsed} - {unscaledRect}");
         if (_currentTool != null)
-            _currentTool.OnPaint(g.Graphics);
+            _currentTool.OnPaint(g.Graphics, TranslateToUnscaledPoint(PointToClient(MousePosition)));
     }
     private void OnDragDrop(object sender, DragEventArgs e)
     {
@@ -158,12 +160,15 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
 
         _toolCalibrate = new ToolCalibrate(_map);
         _toolCalibrate.RequiresRepaint += CurrentToolOnRequiresRepaint;
-        _currentTool = _defaultTool = new DefaultTool(_map, this);
+        _defaultTool = new DefaultTool(_map, this);
+        _defaultTool.SetBrushSize(_brushSize);
         _defaultTool.RequiresRepaint+= CurrentToolOnRequiresRepaint;
         
         _markingTool = new MarkingTool(_map, this);
+        _markingTool.SetBrushSize(_brushSize);
         _markingTool.RequiresRepaint+= CurrentToolOnRequiresRepaint;
-
+        
+        SetTool(_defaultTool);
     }
     private void CurrentToolOnRequiresRepaint(RectangleF obj)
     {
@@ -202,10 +207,9 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     public void CalibrationMode(bool calibrate)
     {
         if (calibrate)
-            _currentTool = _toolCalibrate;
+            SetTool(_toolCalibrate);
         else
-            _currentTool = _defaultTool;
-        Invalidate();
+            SetTool(_defaultTool);
     }
 
     public void SaveFile()
@@ -215,16 +219,24 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
 
     public void SetBrushSize(float brushSizeInCells)
     {
-        _defaultTool.SetBrushSize(brushSizeInCells);
-        _markingTool.SetBrushSize(brushSizeInCells);
+        _brushSize = brushSizeInCells;
+        _defaultTool?.SetBrushSize(brushSizeInCells);
+        _markingTool?.SetBrushSize(brushSizeInCells);
     }
 
     public void MarkingMode(bool mark)
     {
         if (mark)
-            _currentTool = _markingTool;
+            SetTool(_markingTool);
         else
-            _currentTool = _defaultTool;
+            SetTool(_defaultTool);
+        
+    }
+
+    private void SetTool(ITool tool)
+    {
+        _currentTool = tool;
+        ToolChange?.Invoke(tool);
         Invalidate();
     }
 }

@@ -141,9 +141,10 @@ public class GmMap : IDisposable
     public void MarkAt(PointF unscaledPoint, float brushSize, int argbColor)
     {
         var rect = new RectangleF(unscaledPoint.X - brushSize / 2f, unscaledPoint.Y - brushSize / 2f, brushSize, brushSize);
-        var markId = _mapInfo.Marks.LastOrDefault()?.Id ?? 1; 
+        var markId = _mapInfo.Marks.LastOrDefault()?.Id ?? 0;
+        markId++; // next number
         _mapInfo.Marks.Add(new Mark{X = unscaledPoint.X, Y = unscaledPoint.Y,
-            ArgbColor = argbColor, Radius = (int)brushSize});
+            ArgbColor = argbColor, Radius = (int)brushSize, Id = markId});
         OnMessage?.Invoke(new MarkAtMessage(unscaledPoint, (int)brushSize, argbColor, markId));
         OnRectUpdated?.Invoke(rect);
     }

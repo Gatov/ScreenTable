@@ -89,7 +89,7 @@ public class ToolCalibrate : ITool
     public event Action<RectangleF> RequiresRepaint;
     public bool DrawFog => false;
 
-    public void OnPaint(Graphics graphics)
+    public void OnPaint(Graphics graphics, Point unscaledCursorPoint)
     {
         //graphics.ScaleTransform(1, 1);
         //float minDistance = Math.Min(_calibrationCurrent.X - _calibrationStart.X,
@@ -119,5 +119,5 @@ public class ToolCalibrate : ITool
         graphics.DrawLine(cross, 0, _calibrationCurrent.Y, width, _calibrationCurrent.Y);
 
     }
-
+    public string Hint => "Use MLB to select grid area then Wheel to adjust cell size";
 }

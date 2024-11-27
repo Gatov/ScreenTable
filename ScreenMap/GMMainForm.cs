@@ -1,4 +1,6 @@
 ﻿using ScreenMap.Logic;
+using ScreenMap.Logic.Tools;
+using ScreenTable.Tools;
 
 namespace ScreenMap
 {
@@ -18,18 +20,36 @@ namespace ScreenMap
             _playerView.Show();
             gmMapView1.Map.OnMessage += controller.ProcessMessage;
             controller.OnMessage += gmMapView1.Map.ProcessMessage;
+            gmMapView1.ToolChange += GmMapViewOnToolChange;
             //controller.OnMessage += gmMapView1.
         }
 
-        private void barCheckItem_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        private void GmMapViewOnToolChange(ITool obj)
+        {
+            barCheckItemCalibrate.Checked = obj is ToolCalibrate;
+            barCheckItemMarks.Checked = obj is MarkingTool;
+            switch (obj)
+            {
+                case ToolCalibrate: _currentMode = Mode.Calibrate; break;
+                case MarkingTool: _currentMode = Mode.Mark; break;
+                default: _currentMode = Mode.Normal; break;
+            }
+            barStaticItemHint.Hint = obj.Hint;
+        }
+
+        private void BarCheckItemCalibrateCheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
         {
             if (_currentMode == Mode.Normal)
                 _currentMode = Mode.Calibrate;
             else if (_currentMode == Mode.Calibrate)
                 _currentMode = Mode.Normal;
-            else return;
+            else
+            {
+                barCheckItemCalibrate.Checked = false;
+                return;
+            }
             gmMapView1.CalibrationMode(_currentMode == Mode.Calibrate);
-            barCheckItem.Checked = _currentMode == Mode.Calibrate;
+            barCheckItemCalibrate.Checked = _currentMode == Mode.Calibrate;
         }
 
         private void barButtonItemSave_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
@@ -41,6 +61,7 @@ namespace ScreenMap
         {
             var str = barListItemBrushes.Strings[e.Index];
             gmMapView1.SetBrushSize(float.Parse(str));
+            barListItemBrushes.Caption = str;
         }
 
         private void barCheckItemMarks_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
@@ -49,7 +70,11 @@ namespace ScreenMap
                 _currentMode = Mode.Mark;
             else if (_currentMode == Mode.Mark)
                 _currentMode = Mode.Normal;
-            else return;
+            else
+            {
+                barCheckItemMarks.Checked = false;
+                return;
+            }
 
             gmMapView1.MarkingMode(_currentMode == Mode.Mark);
             barCheckItemMarks.Checked = _currentMode == Mode.Mark;
