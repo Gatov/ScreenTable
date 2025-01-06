@@ -135,7 +135,7 @@ public class DefaultTool : ITool
 
     public event Action<RectangleF> RequiresRepaint;
     public bool DrawFog => true;
-    public string Hint => "LMB to reveal, Shift-MLB to hide, MWheel to zoom";
+    public virtual string Hint => "LMB to reveal, Shift-MLB to hide, MWheel to zoom";
 
     public void SetBrushSize(float sizeInCells)
     {

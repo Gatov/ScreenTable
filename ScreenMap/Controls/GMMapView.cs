@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 using DevExpress.Utils;
 using DevExpress.Utils.Extensions;
 using ScreenMap.Logic;
 using ScreenMap.Logic.Tools;
 using ScreenTable.Tools;
+// ReSharper disable LocalizableElement
 
 namespace ScreenMap.Controls;
 
@@ -49,6 +51,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         MouseMove += OnMouseMove;
         MouseUp += OnMouseUp;
         MouseWheel += OnMouseWheel;
+        KeyDown += OnKeyDown;
             
         DragOver += (_, args) =>
         {
@@ -58,6 +61,12 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         AllowDrop = true;
         _map = new GmMap();
         DragDrop += OnDragDrop;
+    }
+
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if(_currentTool is IKeyTool keyPressTool)
+                keyPressTool.OnKeyDown(e);
     }
 
     private void OnMouseWheel(object sender, MouseEventArgs e)
@@ -141,6 +150,11 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
                         ZoomLevel = 1; // reset
                         InitializeTools();
                         Invalidate();
+                        var form = FindForm();
+                        if (form != null)
+                        {
+                            form.Text = $"GM View:{Path.GetFileNameWithoutExtension(fileDrop)}";
+                        }
                     }
                     finally
                     {

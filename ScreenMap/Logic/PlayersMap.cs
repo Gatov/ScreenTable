@@ -23,14 +23,17 @@ public class PlayersMap : IDisposable
     private float _lastDpiX = 90;
     private float _lastDpiY = 90;
     private SizeF _lastClientSize = new SizeF(100,100);
+    public string Name { get; private set; } 
 
 
-    public void Initialize(Stream mapStream)
+    public void Initialize(Stream mapStream, string name)
     {
         _originalMap = Image.FromStream(mapStream);
         InitializePlayerImage(_originalMap);
         InitializeBrushes(_originalMap);
         NotifyUpdate();
+        Name = name;
+
     }
 
     private void NotifyUpdate(RectangleF? rc = null)
@@ -102,7 +105,7 @@ public class PlayersMap : IDisposable
             var markColor = Color.FromArgb(mark.ArgbColor);
             using var brush = new SolidBrush(markColor);
             g.FillEllipse(brush, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
-            using var pen = new Pen(Color.FromArgb(200, markColor), 1f/ZoomX);
+            using var pen = new Pen(Color.FromArgb(200, markColor), 1f/ZoomX);  
             g.DrawEllipse(pen, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
         }
         using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / ZoomY)))

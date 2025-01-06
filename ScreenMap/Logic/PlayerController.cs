@@ -32,7 +32,7 @@ public class PlayerController
                 break; 
             case MarkAtMessage markAt: _playersMap.MarkAt(markAt);
                 break; 
-            case NewImageMessage newImg: using (var ms = new MemoryStream(newImg.Data)) _playersMap.Initialize(ms);
+            case NewImageMessage newImg: using (var ms = new MemoryStream(newImg.Data)) _playersMap.Initialize(ms, newImg.Name);
                 _mapView.SetMap(_playersMap);
                 break;
             case  GridDataMessage gridData:

@@ -16,3 +16,8 @@ public interface ITool
     bool DrawFog { get; }
     string Hint { get; }
 }
+
+public interface IKeyTool
+{
+    void OnKeyDown(KeyEventArgs e);
+}

@@ -30,7 +30,7 @@ public class MarkingTool : DefaultTool
     private void MarkAt(PointF unscaledPos, Keys modifiers)
     {
         if(modifiers == Keys.None)
-            _gmMap.MarkAt(unscaledPos, BrushSize, Color.FromArgb(40,_colors[CurrentBrushIndex]).ToArgb());
+            _gmMap.MarkAt(unscaledPos, BrushSize, Color.FromArgb(70,_colors[CurrentBrushIndex]).ToArgb());
         else if(modifiers == Keys.Control)
             _gmMap.RemoveMarkAt(unscaledPos);
         
@@ -47,7 +47,7 @@ public class MarkingTool : DefaultTool
     {
         var old = graphics.CompositingMode;
         graphics.CompositingMode = CompositingMode.SourceOver;
-        using var brush = new SolidBrush(Color.FromArgb(30, _colors[CurrentBrushIndex]));
+        using var brush = new SolidBrush(Color.FromArgb(70, _colors[CurrentBrushIndex]));
         var fp = (PointF)unscaledCursorPoint;
         graphics.FillEllipse(brush, fp.RectByCenter(BrushSize));
         graphics.CompositingMode = old;
@@ -64,5 +64,5 @@ public class MarkingTool : DefaultTool
         _lastKnownLocation = unscaledPos;
         Invalidate(_lastKnownLocation.RectByCenter(BrushSize));
     }
-    public string Hint => "LMB to add mark, Ctrl-MLB to remove, MWheel to change color";
+    public override string Hint => "LMB to add mark, Ctrl-MLB to remove, MWheel to change color";
 }

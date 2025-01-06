@@ -34,7 +34,7 @@ namespace ScreenMap
                 case MarkingTool: _currentMode = Mode.Mark; break;
                 default: _currentMode = Mode.Normal; break;
             }
-            barStaticItemHint.Hint = obj.Hint;
+            barStaticItemHint.Caption = obj.Hint;
         }
 
         private void BarCheckItemCalibrateCheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)

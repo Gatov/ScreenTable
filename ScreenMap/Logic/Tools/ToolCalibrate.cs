@@ -6,7 +6,7 @@ using ScreenMap.Logic;
 
 namespace ScreenTable.Tools;
 
-public class ToolCalibrate : ITool
+public class ToolCalibrate : ITool, IKeyTool
 {
     private readonly GmMap _map;
     //private MapInfo _doc;
@@ -58,19 +58,23 @@ public class ToolCalibrate : ITool
     {
         if (modifiers.HasFlag(Keys.Shift))
         {
-            _calibrationCellSize *= (1+0.002f * ticks / 120);
+            //_calibrationCellSize *= (1+0.002f * ticks / 120);
+            // ReSharper disable once PossibleLossOfFraction
+            _calibrationCurrent.X = (int)_calibrationCurrent.X + ticks / 120;
+            // ReSharper disable once PossibleLossOfFraction
+            _calibrationCurrent.Y = (int)_calibrationCurrent.Y + ticks / 120;
         }
         else
         {
             // ReSharper disable once PossibleLossOfFraction
             _calibrationCells += ticks / 120;
             _calibrationCells = Math.Max(2, _calibrationCells);
-
-            float minDistance = Math.Min(_calibrationCurrent.X - _calibrationStart.X,
-                _calibrationCurrent.Y - _calibrationStart.Y);
-            _calibrationCellSize = minDistance / _calibrationCells; // we will fit 5 cells in there
         }
-
+        
+        float minDistance = Math.Min(_calibrationCurrent.X - _calibrationStart.X,
+            _calibrationCurrent.Y - _calibrationStart.Y);
+        _calibrationCellSize = minDistance / _calibrationCells; // we will fit 5 cells in there
+        
         UpdateInfo();
         RequiresRepaint?.Invoke(RectangleF.Empty); // full repaint
     }
@@ -119,5 +123,17 @@ public class ToolCalibrate : ITool
         graphics.DrawLine(cross, 0, _calibrationCurrent.Y, width, _calibrationCurrent.Y);
 
     }
-    public string Hint => "Use MLB to select grid area then Wheel to adjust cell size";
+    public string Hint => "Use MLB to select grid area then Wheel to adjust cell size. Shift-Wheel to fine tune.";
+    public void OnKeyDown(KeyEventArgs e)
+    {
+        switch (e.KeyCode)
+        {
+            case Keys.Add: _calibrationCurrent.X = (int)_calibrationCurrent.X - 1; e.Handled = true; break;
+            case Keys.Right: _calibrationCurrent.X = (int)_calibrationCurrent.X + 1; e.Handled = true; break;
+            case Keys.Up: _calibrationCurrent.X = (int)_calibrationCurrent.Y - 1; e.Handled = true; break;
+            case Keys.Down: _calibrationCurrent.X = (int)_calibrationCurrent.Y + 1; e.Handled = true; break;
+        }
+        if(e.Handled)
+            RequiresRepaint?.Invoke(RectangleF.Empty); // full repaint
+    }
 }

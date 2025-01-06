@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using ScreenMap.Logic;
+// ReSharper disable LocalizableElement
 
 namespace ScreenMap.Controls;
 
@@ -22,6 +23,10 @@ public partial class PlayersMapView : UserControl
     public void SetMap(PlayersMap map)
     {
         _map = map;
+        var form = FindForm();
+        if (form != null)
+            form.Text = $"Players:{map.Name}";
+        
         _map.OnRectUpdated += rc =>
         {
             SafeUpdate(rc);
