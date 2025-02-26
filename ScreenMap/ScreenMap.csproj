@@ -4,12 +4,8 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationIcon>an application icon featuring a medieval table with a map on it.ico</ApplicationIcon>
+    <ApplicationIcon>ScreenTable.ico</ApplicationIcon>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Content Include="an application icon featuring a medieval table with a map on it.ico" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="DevExpress.Win.BonusSkins" Version="24.1.6" />
@@ -36,6 +32,10 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Resources\" />
   </ItemGroup>
 
 </Project>

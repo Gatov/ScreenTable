@@ -23,6 +23,7 @@ public class PlayersMap : IDisposable
     private float _lastDpiX = 90;
     private float _lastDpiY = 90;
     private SizeF _lastClientSize = new SizeF(100,100);
+    private Color _fogOfWar = Color.Tan;
     public string Name { get; private set; } 
 
 
@@ -54,7 +55,7 @@ public class PlayersMap : IDisposable
     {
         _playersImage = new Bitmap(newMap.Width, newMap.Height, PixelFormat.Format32bppArgb);
         using Graphics g = Graphics.FromImage(_playersImage);
-        using var brush = new SolidBrush( Color.CadetBlue);
+        using var brush = new SolidBrush( _fogOfWar);
         g.FillRectangle(brush, 0,0, _playersImage.Width, _playersImage.Height);
         NotifyUpdate();
     }
@@ -137,7 +138,7 @@ public class PlayersMap : IDisposable
     {
         _revealBrush = FogUtil.CreateSemitransparentBrushFromImage(newMap, 0.8f);
         _semiRevealBrush = FogUtil.CreateSemitransparentBrushFromImage(newMap, 0.2f);
-        _hideBrush = new SolidBrush( Color.CadetBlue);
+        _hideBrush = new SolidBrush( _fogOfWar);
     }
 
     public void Dispose()

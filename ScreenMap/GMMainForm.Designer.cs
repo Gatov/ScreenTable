@@ -68,8 +68,9 @@ namespace ScreenMap
             gmMapView1.Appearance.BackColor = System.Drawing.SystemColors.Info;
             gmMapView1.Appearance.Options.UseBackColor = true;
             gmMapView1.Location = new System.Drawing.Point(0, 0);
+            gmMapView1.Margin = new System.Windows.Forms.Padding(10, 10, 10, 10);
             gmMapView1.Name = "gmMapView1";
-            gmMapView1.Size = new System.Drawing.Size(682, 1000);
+            gmMapView1.Size = new System.Drawing.Size(2048, 1923);
             gmMapView1.TabIndex = 0;
             gmMapView1.ZoomLevel = 1F;
             // 
@@ -112,7 +113,7 @@ namespace ScreenMap
             // 
             barCheckItemCalibrate.Caption = "Calibrate";
             barCheckItemCalibrate.Id = 1;
-            barCheckItemCalibrate.ImageOptions.Image = Properties.Resources.bordersall_32x32;
+            barCheckItemCalibrate.ImageOptions.Image = (System.Drawing.Image)resources.GetObject("barCheckItemCalibrate.ImageOptions.Image");
             barCheckItemCalibrate.Name = "barCheckItemCalibrate";
             toolTipTitleItem2.Text = "Calibration Tool";
             toolTipItem2.Text = "L-Button to mark the grid\r\nthen\r\nMouse Wheel to adjust cell size";
@@ -175,52 +176,58 @@ namespace ScreenMap
             barDockControlTop.Dock = System.Windows.Forms.DockStyle.Top;
             barDockControlTop.Location = new System.Drawing.Point(0, 0);
             barDockControlTop.Manager = barManager1;
-            barDockControlTop.Size = new System.Drawing.Size(969, 40);
+            barDockControlTop.Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
+            barDockControlTop.Size = new System.Drawing.Size(1938, 78);
             // 
             // barDockControlBottom
             // 
             barDockControlBottom.CausesValidation = false;
             barDockControlBottom.Dock = System.Windows.Forms.DockStyle.Bottom;
-            barDockControlBottom.Location = new System.Drawing.Point(0, 418);
+            barDockControlBottom.Location = new System.Drawing.Point(0, 804);
             barDockControlBottom.Manager = barManager1;
-            barDockControlBottom.Size = new System.Drawing.Size(969, 22);
+            barDockControlBottom.Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
+            barDockControlBottom.Size = new System.Drawing.Size(1938, 42);
             // 
             // barDockControlLeft
             // 
             barDockControlLeft.CausesValidation = false;
             barDockControlLeft.Dock = System.Windows.Forms.DockStyle.Left;
-            barDockControlLeft.Location = new System.Drawing.Point(0, 40);
+            barDockControlLeft.Location = new System.Drawing.Point(0, 78);
             barDockControlLeft.Manager = barManager1;
-            barDockControlLeft.Size = new System.Drawing.Size(0, 378);
+            barDockControlLeft.Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
+            barDockControlLeft.Size = new System.Drawing.Size(0, 726);
             // 
             // barDockControlRight
             // 
             barDockControlRight.CausesValidation = false;
             barDockControlRight.Dock = System.Windows.Forms.DockStyle.Right;
-            barDockControlRight.Location = new System.Drawing.Point(969, 40);
+            barDockControlRight.Location = new System.Drawing.Point(1938, 78);
             barDockControlRight.Manager = barManager1;
-            barDockControlRight.Size = new System.Drawing.Size(0, 378);
+            barDockControlRight.Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
+            barDockControlRight.Size = new System.Drawing.Size(0, 726);
             // 
             // xtraScrollableControl1
             // 
             xtraScrollableControl1.Controls.Add(gmMapView1);
             xtraScrollableControl1.Dock = System.Windows.Forms.DockStyle.Fill;
-            xtraScrollableControl1.Location = new System.Drawing.Point(0, 40);
+            xtraScrollableControl1.Location = new System.Drawing.Point(0, 78);
+            xtraScrollableControl1.Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
             xtraScrollableControl1.Name = "xtraScrollableControl1";
-            xtraScrollableControl1.Size = new System.Drawing.Size(969, 378);
+            xtraScrollableControl1.Size = new System.Drawing.Size(1938, 726);
             xtraScrollableControl1.TabIndex = 5;
             // 
             // GMMainForm
             // 
-            AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+            AutoScaleDimensions = new System.Drawing.SizeF(12F, 25F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            ClientSize = new System.Drawing.Size(969, 440);
+            ClientSize = new System.Drawing.Size(1938, 846);
             Controls.Add(xtraScrollableControl1);
             Controls.Add(barDockControlLeft);
             Controls.Add(barDockControlRight);
             Controls.Add(barDockControlBottom);
             Controls.Add(barDockControlTop);
             IconOptions.Icon = (System.Drawing.Icon)resources.GetObject("GMMainForm.IconOptions.Icon");
+            Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
             Name = "GMMainForm";
             Text = "GM View";
             ((System.ComponentModel.ISupportInitialize)barManager1).EndInit();
