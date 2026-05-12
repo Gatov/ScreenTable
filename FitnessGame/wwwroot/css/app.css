@@ -185,6 +185,9 @@ html, body {
     align-items: center;
     margin: 2px 0;
 }
+.warp-row.warp-row-1 {
+    grid-template-columns: 60px 1fr;
+}
 .warp-row label {
     display: grid;
     grid-template-columns: 12px 1fr 36px;

@@ -54,8 +54,8 @@
           "side": "center",
           "x": 0.5426998872023362,
           "y": 0.41844438251696137,
-          "base_weight": 1,
-          "influence_radius": 0.06
+          "base_weight": 0.8,
+          "influence_radius": 0.17
         }
       ]
     },

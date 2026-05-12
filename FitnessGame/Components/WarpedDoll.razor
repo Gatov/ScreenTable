@@ -16,19 +16,13 @@
         @foreach (var g in _mesh.MorphGroups)
         {
             var key = g.Id;
-            <div class="warp-row">
+            <div class="warp-row warp-row-1">
                 <span class="warp-label">@key</span>
-                <label>X
-                    <input type="range" min="-0.15" max="0.15" step="0.005"
-                           value="@F(_debugDx.GetValueOrDefault(key))"
-                           @oninput="e => OnDebug(key, true, e.Value)" />
-                    <span>@F(_debugDx.GetValueOrDefault(key))</span>
-                </label>
-                <label>Y
-                    <input type="range" min="-0.15" max="0.15" step="0.005"
-                           value="@F(_debugDy.GetValueOrDefault(key))"
-                           @oninput="e => OnDebug(key, false, e.Value)" />
-                    <span>@F(_debugDy.GetValueOrDefault(key))</span>
+                <label>expand
+                    <input type="range" min="-0.10" max="0.10" step="0.002"
+                           value="@F(_debugExpand.GetValueOrDefault(key))"
+                           @oninput="e => OnDebug(key, e.Value)" />
+                    <span>@F(_debugExpand.GetValueOrDefault(key))</span>
                 </label>
             </div>
         }
@@ -47,8 +41,7 @@
     MeshData? _mesh;
     bool _initialized;
 
-    readonly Dictionary<string, double> _debugDx = new();
-    readonly Dictionary<string, double> _debugDy = new();
+    readonly Dictionary<string, double> _debugExpand = new();
 
     // Buffer reused each frame.
     double[]? _verts;
@@ -113,40 +106,19 @@
         await _module.InvokeVoidAsync("render", _canvasId, _verts, GridN);
     }
 
-    // ---- Stats -> morph-group (dx, dy) offsets in normalized image space.
-    // Mirrors the silhouette logic from the old PaperDoll; values around
-    // ±0.05 give a clearly visible warp without breaking the photo.
-    (double dx, double dy) GroupOffset(string id)
+    // ---- Stats -> per-group "expand" amount in normalized image space.
+    // Positive values puff the region outward; negative values pull it in.
+    // Mirrors the silhouette logic from the old PaperDoll.
+    double GroupExpand(string id) => id switch
     {
-        double dx = 0, dy = 0;
-        switch (id)
-        {
-            case "breast":
-                // Bust 0..100, neutral ~ 45 (=12 + 24*1.1 + 0)
-                dx = (S.Bust - 45) * 0.0010;
-                dy = (S.Bust - 45) * 0.0004;
-                break;
-            case "waist":
-                // Wider with body fat, tighter with abs tone. Neutral ~ 0.
-                dx = ((S.BodyFat - 24) * 0.0018 - (S.AbsTone - 25) * 0.0008);
-                break;
-            case "abs":
-                // Tighter abs pulls center inward (negative y == up); use dy for definition.
-                dy = -(S.AbsTone - 25) * 0.0006;
-                break;
-            case "hips":
-                // Wider with body fat and glute tone.
-                dx = ((S.BodyFat - 24) * 0.0020 + (S.GluteTone - 30) * 0.0014);
-                break;
-            case "thighs":
-                dx = ((S.BodyFat - 24) * 0.0020 + (S.LegsTone - 25) * 0.0008);
-                break;
-            case "calves":
-                dx = ((S.BodyFat - 24) * 0.0010 + (S.LegsTone - 25) * 0.0006);
-                break;
-        }
-        return (dx, dy);
-    }
+        "breast" => (S.Bust - 45) * 0.0010,
+        "waist"  => (S.BodyFat - 24) * 0.0018 - (S.AbsTone - 25) * 0.0008,
+        "abs"    => -(S.AbsTone - 25) * 0.0008,
+        "hips"   => (S.BodyFat - 24) * 0.0020 + (S.GluteTone - 30) * 0.0014,
+        "thighs" => (S.BodyFat - 24) * 0.0020 + (S.LegsTone - 25) * 0.0008,
+        "calves" => (S.BodyFat - 24) * 0.0010 + (S.LegsTone - 25) * 0.0006,
+        _ => 0
+    };
 
     List<Cp> BuildControlPoints()
     {
@@ -155,23 +127,17 @@
 
         foreach (var g in _mesh.MorphGroups)
         {
-            var (gdx, gdy) = GroupOffset(g.Id);
-            var sx = _debugDx.GetValueOrDefault(g.Id);
-            var sy = _debugDy.GetValueOrDefault(g.Id);
+            var expand = GroupExpand(g.Id) + _debugExpand.GetValueOrDefault(g.Id);
             foreach (var cp in g.ControlPoints)
             {
-                // Sided points push outward: left -> -X, right -> +X, center neutral.
-                double sign = cp.Side switch { "left" => -1, "right" => +1, _ => 0 };
-                double dx = sign * (gdx + sx);
-                double dy = (gdy + sy);
-                list.Add(new Cp(cp.X, cp.Y, dx, dy, cp.BaseWeight, cp.InfluenceRadius));
+                list.Add(new Cp(cp.X, cp.Y, expand, cp.BaseWeight, cp.InfluenceRadius));
             }
         }
 
         foreach (var a in _mesh.StaticAnchors)
         {
-            // Pin: zero offset, modest weight, generous radius so head/arms/feet stay put.
-            list.Add(new Cp(a.X, a.Y, 0, 0, 1.5, 0.18));
+            // Pin: zero expansion, modest weight, generous radius so head/arms/feet stay put.
+            list.Add(new Cp(a.X, a.Y, 0, 1.5, 0.18));
         }
         return list;
     }
@@ -182,6 +148,11 @@
         return t * t * (3 - 2 * t);
     }
 
+    // Radial expansion warp: each control point pushes its neighborhood
+    // outward along the radial direction (toward the vertex) by `expand`,
+    // weighted by the smoothstep falloff. Static anchors (expand=0) cancel
+    // motion in their neighborhood by contributing weight with zero push,
+    // dragging the weighted average back toward zero.
     static (double dx, double dy) Warp(double x, double y, IList<Cp> cps)
     {
         double wx = 0, wy = 0, ws = 0;
@@ -192,24 +163,27 @@
             double t = d / c.Radius;
             if (t >= 1) continue;
             double w = c.Weight * (1 - Smoothstep(t));
-            wx += w * c.Dx;
-            wy += w * c.Dy;
+            if (c.Expand != 0 && d > 1e-6)
+            {
+                double inv = 1.0 / d;
+                wx += w * c.Expand * ddx * inv;
+                wy += w * c.Expand * ddy * inv;
+            }
             ws += w;
         }
         return ws > 1e-6 ? (wx / ws, wy / ws) : (0, 0);
     }
 
-    void OnDebug(string key, bool isX, object? raw)
+    void OnDebug(string key, object? raw)
     {
         if (!double.TryParse(raw?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) return;
-        (isX ? _debugDx : _debugDy)[key] = v;
+        _debugExpand[key] = v;
         _ = Redraw();
     }
 
     void ResetDebug()
     {
-        _debugDx.Clear();
-        _debugDy.Clear();
+        _debugExpand.Clear();
         _ = Redraw();
     }
 
@@ -223,7 +197,7 @@
         }
     }
 
-    record Cp(double X, double Y, double Dx, double Dy, double Weight, double Radius);
+    record Cp(double X, double Y, double Expand, double Weight, double Radius);
 
     class MeshData
     {
