@@ -420,33 +420,34 @@
     }
 
     // ---- Tights overlay on visible leg portion ----
+    // Traces the same silhouette as LegPath so the tights exactly cover the
+    // skin. The top edge is tucked a few px under the skirt hem.
     string TightsPath(bool left)
     {
         var sign = left ? -1 : 1;
+        var H = Hips;
         var T = Thigh;
         var C = Calf;
-        var topOuter   = Cx + sign * (T * 0.85);
-        var topInner   = Cx + sign * (T * 0.30 + 5);
-        var kneeOuter  = Cx + sign * (T * 0.95 + 2);
-        var kneeInner  = Cx + sign * (T * 0.30 + 5);
-        var ankleOuter = Cx + sign * (C * 0.90 + 4);
-        var ankleInner = Cx + sign * (C * 0.35 + 6);
+        var outerHipX    = Cx + sign * (H * 0.78);
+        var outerKneeX   = Cx + sign * (T * 0.95 + 2);
+        var outerAnkleX  = Cx + sign * (C * 0.90 + 4);
+        var innerCrotchX = Cx + sign * 2;
+        var innerKneeX   = Cx + sign * (T * 0.30 + 5);
+        var innerAnkleX  = Cx + sign * (C * 0.35 + 6);
 
         return string.Format(CultureInfo.InvariantCulture,
             "M {0:0.0} {1:0.0} " +
-            "L {2:0.0} {1:0.0} " +
-            "Q {3:0.0} 410, {4:0.0} 410 " +
-            "Q {5:0.0} 470, {6:0.0} 522 " +
-            "L {7:0.0} 522 " +
-            "Q {8:0.0} 470, {9:0.0} 410 " +
-            "Q {10:0.0} 410, {2:0.0} {1:0.0} Z",
-            topOuter, SkirtHemY - 4,
-            topInner,
-            kneeInner, kneeInner,
-            ankleInner, ankleInner,
-            ankleOuter,
-            ankleOuter, kneeOuter,
-            kneeOuter);
+            "Q {2:0.0} 380, {3:0.0} 410 " +
+            "Q {4:0.0} 470, {5:0.0} 520 " +
+            "L {6:0.0} 520 " +
+            "Q {7:0.0} 470, {8:0.0} 410 " +
+            "Q {9:0.0} 380, {10:0.0} {1:0.0} Z",
+            outerHipX, SkirtHemY - 4,
+            outerHipX + sign * 1.5, outerKneeX,
+            outerAnkleX + sign * 1, outerAnkleX,
+            innerAnkleX,
+            innerKneeX, innerKneeX,
+            innerCrotchX - sign * 1, innerCrotchX);
     }
 
     string CalfHighlight(bool left)

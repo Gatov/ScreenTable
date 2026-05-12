@@ -64,7 +64,8 @@
                 }
             </div>
 
-            <h2>2. Pick a meal for the day</h2>
+            <h2>2. Pick meals for the day</h2>
+            <p class="meal-hint">Tap to add/remove. Stack multiple meals to hit your calorie target.</p>
             @foreach (var tier in Enum.GetValues<FoodTier>())
             {
                 <div class="tier">
@@ -72,8 +73,8 @@
                     <div class="grid grid-foods">
                         @foreach (var f in Food.All.Where(x => x.Tier == tier))
                         {
-                            var isSel = _food?.Name == f.Name;
-                            <button class="card @(isSel ? "selected" : "")" @onclick="() => _food = f" title="@f.Description">
+                            var isSel = _foods.Any(x => x.Name == f.Name);
+                            <button class="card @(isSel ? "selected" : "")" @onclick="() => ToggleFood(f)" title="@f.Description">
                                 <span class="emoji">@f.Emoji</span>
                                 <span class="name">@f.Name</span>
                                 <span class="sub">@f.Calories kcal · @f.Protein P · @f.Carbs C · @f.Fat F</span>
@@ -83,8 +84,30 @@
                 </div>
             }
 
+            <div class="meal-summary">
+                @{
+                    var totalCal = _foods.Sum(f => f.Calories);
+                    var totalProtein = _foods.Sum(f => f.Protein);
+                    var burn = _activity?.CaloriesBurned ?? 0;
+                    var balance = totalCal - burn;
+                }
+                <div>
+                    <strong>@_foods.Count meal@(_foods.Count == 1 ? "" : "s")</strong>
+                    · @totalCal kcal in
+                    @if (_activity is not null)
+                    {
+                        <span> · @burn kcal out · balance <span class="@(balance < -200 ? "neg" : balance > 200 ? "pos" : "even")">@(balance > 0 ? "+" : "")@balance kcal</span></span>
+                    }
+                    · @totalProtein g protein
+                </div>
+                @if (_foods.Count > 0)
+                {
+                    <button class="link-btn" @onclick="() => _foods.Clear()">Clear meals</button>
+                }
+            </div>
+
             <div class="commit">
-                <button class="primary" disabled="@( _activity is null || _food is null)" @onclick="Commit">
+                <button class="primary" disabled="@( _activity is null || _foods.Count == 0)" @onclick="Commit">
                     End the day →
                 </button>
             </div>
@@ -95,7 +118,7 @@
                     <h2>Yesterday</h2>
                     <p class="log-summary">
                         <strong>@turn.Activity.Emoji @turn.Activity.Name</strong>
-                        + <strong>@turn.Food.Emoji @turn.Food.Name</strong>
+                        + <strong>@FormatFoods(turn.Foods)</strong>
                         · @(turn.Delta > 0 ? "+" : "")@turn.Delta kcal balance
                     </p>
                     <ul>
@@ -112,7 +135,7 @@
 
 @code {
     private Activity? _activity;
-    private Food? _food;
+    private readonly List<Food> _foods = new();
 
     protected override void OnInitialized()
     {
@@ -123,12 +146,25 @@
 
     private void OnChanged() => InvokeAsync(StateHasChanged);
 
+    private void ToggleFood(Food f)
+    {
+        var existing = _foods.FindIndex(x => x.Name == f.Name);
+        if (existing >= 0) _foods.RemoveAt(existing);
+        else _foods.Add(f);
+    }
+
     private void Commit()
     {
-        if (_activity is null || _food is null) return;
-        Engine.AdvanceDay(_activity, _food);
+        if (_activity is null || _foods.Count == 0) return;
+        Engine.AdvanceDay(_activity, _foods);
         _activity = null;
-        _food = null;
+        _foods.Clear();
+    }
+
+    private static string FormatFoods(IReadOnlyList<Food> foods)
+    {
+        if (foods.Count == 0) return "";
+        return string.Join(" + ", foods.Select(f => $"{f.Emoji} {f.Name}"));
     }
 
     private static string FormatFollowers(int n)
