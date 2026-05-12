@@ -1,0 +1,139 @@
+@page "/"
+@inject GameEngine Engine
+@implements IDisposable
+
+<PageTitle>Model Trainer — fitness simulator</PageTitle>
+
+<div class="game-shell">
+    <header class="topbar">
+        <h1>Model Trainer</h1>
+        <div class="day">Day <strong>@Engine.Stats.Day</strong></div>
+        <button class="reset" @onclick="Engine.Reset" title="Restart">↺ Restart</button>
+    </header>
+
+    <div class="game-layout">
+
+        <!-- Left: paper doll + headline numbers -->
+        <section class="doll-panel">
+            <PaperDoll S="Engine.Stats" />
+            <div class="doll-tagline">
+                <span class="ig">@@you_get_fit</span>
+                <span class="followers">@FormatFollowers(Engine.Stats.Followers) followers</span>
+            </div>
+        </section>
+
+        <!-- Middle: stats -->
+        <section class="stats-panel">
+            <h2>Body</h2>
+            <StatBar Label="Weight"      Value="@Engine.Stats.Weight"     Unit="kg" Min="40" Max="120" Color="#76a9ff" />
+            <StatBar Label="Body fat"    Value="@Engine.Stats.BodyFat"    Unit="%"  Min="6"  Max="50"  Color="#ff8a4a" Invert="true" />
+            <StatBar Label="Muscle mass" Value="@Engine.Stats.MuscleMass" Unit="kg" Min="10" Max="50"  Color="#ff4d7e" />
+
+            <h2>Performance</h2>
+            <StatBar Label="Strength"    Value="@Engine.Stats.Strength"    Max="100" Color="#e6b500" />
+            <StatBar Label="Endurance"   Value="@Engine.Stats.Endurance"   Max="100" Color="#36c98f" />
+            <StatBar Label="Flexibility" Value="@Engine.Stats.Flexibility" Max="100" Color="#9b6cff" />
+
+            <h2>Condition</h2>
+            <StatBar Label="Energy"      Value="@Engine.Stats.Energy"      Max="100" Color="#ffd24a" />
+            <StatBar Label="Mood"        Value="@Engine.Stats.Mood"        Max="100" Color="#ff7ab6" />
+            <StatBar Label="Health"      Value="@Engine.Stats.Health"      Max="100" Color="#7ed957" />
+
+            <h2>Muscle tone</h2>
+            <StatBar Label="Chest" Value="@Engine.Stats.ChestTone" Max="100" Color="#ff4d7e" Slim="true" />
+            <StatBar Label="Back"  Value="@Engine.Stats.BackTone"  Max="100" Color="#ff4d7e" Slim="true" />
+            <StatBar Label="Arms"  Value="@Engine.Stats.ArmsTone"  Max="100" Color="#ff4d7e" Slim="true" />
+            <StatBar Label="Abs"   Value="@Engine.Stats.AbsTone"   Max="100" Color="#ff4d7e" Slim="true" />
+            <StatBar Label="Legs"  Value="@Engine.Stats.LegsTone"  Max="100" Color="#ff4d7e" Slim="true" />
+            <StatBar Label="Glutes" Value="@Engine.Stats.GluteTone" Max="100" Color="#ff4d7e" Slim="true" />
+        </section>
+
+        <!-- Right: choices + log -->
+        <section class="choices-panel">
+            <h2>1. Pick your activity</h2>
+            <div class="grid grid-activities">
+                @foreach (var a in Activity.All)
+                {
+                    var isSel = _activity?.Kind == a.Kind;
+                    <button class="card @(isSel ? "selected" : "")" @onclick="() => _activity = a" title="@a.Description">
+                        <span class="emoji">@a.Emoji</span>
+                        <span class="name">@a.Name</span>
+                        <span class="sub">@(a.CaloriesBurned) kcal</span>
+                    </button>
+                }
+            </div>
+
+            <h2>2. Pick a meal for the day</h2>
+            @foreach (var tier in Enum.GetValues<FoodTier>())
+            {
+                <div class="tier">
+                    <div class="tier-label tier-@tier.ToString().ToLower()">@tier</div>
+                    <div class="grid grid-foods">
+                        @foreach (var f in Food.All.Where(x => x.Tier == tier))
+                        {
+                            var isSel = _food?.Name == f.Name;
+                            <button class="card @(isSel ? "selected" : "")" @onclick="() => _food = f" title="@f.Description">
+                                <span class="emoji">@f.Emoji</span>
+                                <span class="name">@f.Name</span>
+                                <span class="sub">@f.Calories kcal · @f.Protein P · @f.Carbs C · @f.Fat F</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="commit">
+                <button class="primary" disabled="@( _activity is null || _food is null)" @onclick="Commit">
+                    End the day →
+                </button>
+            </div>
+
+            @if (Engine.LastTurn is { } turn)
+            {
+                <div class="log">
+                    <h2>Yesterday</h2>
+                    <p class="log-summary">
+                        <strong>@turn.Activity.Emoji @turn.Activity.Name</strong>
+                        + <strong>@turn.Food.Emoji @turn.Food.Name</strong>
+                        · @(turn.Delta > 0 ? "+" : "")@turn.Delta kcal balance
+                    </p>
+                    <ul>
+                        @foreach (var line in turn.Log)
+                        {
+                            <li>@line</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    private Activity? _activity;
+    private Food? _food;
+
+    protected override void OnInitialized()
+    {
+        Engine.Changed += OnChanged;
+    }
+
+    public void Dispose() => Engine.Changed -= OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private void Commit()
+    {
+        if (_activity is null || _food is null) return;
+        Engine.AdvanceDay(_activity, _food);
+        _activity = null;
+        _food = null;
+    }
+
+    private static string FormatFollowers(int n)
+    {
+        if (n >= 1_000_000) return $"{n / 1_000_000.0:0.0}M";
+        if (n >= 1_000) return $"{n / 1_000.0:0.0}K";
+        return n.ToString();
+    }
+}
