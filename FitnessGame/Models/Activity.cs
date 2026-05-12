@@ -42,7 +42,7 @@ public class Activity
             Description = "Intense cardio. Fat-burn + endurance.",
             EnergyCost = 35, CaloriesBurned = 2700 },
         new Activity { Kind = ActivityKind.TrainChest,  Name = "Train chest",     Emoji = "🤎",
-            Description = "Bench, push-ups, dumbbell flyes.",
+            Description = "Bench, push-ups, dumbbell flyes. Lifts the bust.",
             EnergyCost = 30, CaloriesBurned = 2200 },
         new Activity { Kind = ActivityKind.TrainBack,   Name = "Train back",      Emoji = "🪵",
             Description = "Rows, pull-ups, lat work.",

@@ -54,6 +54,24 @@
 
         <!-- BLOUSE -->
         <path d="@BlousePath" fill="@BlouseColor" stroke="@BlouseShade" stroke-width="0.7" />
+        <!-- Bust cup shadows (drape lines under each breast) -->
+        @if (S.Bust > 6)
+        {
+            var alpha = Math.Clamp((S.Bust - 4) / 60.0 + 0.25, 0.25, 0.7);
+            var drop = S.Bust * 0.22 + 3;
+            <path d="@($"M {F(140 - BustReach - 1)} {F(BustCenterY - 2)} Q {F(140 - BustReach * 0.4)} {F(BustCenterY + drop)} 140 {F(BustCenterY + 1)}")"
+                  stroke="@BlouseShade" stroke-width="1.1" fill="none" opacity="@F(alpha)" stroke-linecap="round" />
+            <path d="@($"M 140 {F(BustCenterY + 1)} Q {F(140 + BustReach * 0.4)} {F(BustCenterY + drop)} {F(140 + BustReach + 1)} {F(BustCenterY - 2)}")"
+                  stroke="@BlouseShade" stroke-width="1.1" fill="none" opacity="@F(alpha)" stroke-linecap="round" />
+            <!-- Cleavage hint between cups (very subtle, scales with bust) -->
+            <line x1="140" y1="@F(BustCenterY - 8)" x2="140" y2="@F(BustCenterY + 2)"
+                  stroke="@BlouseShade" stroke-width="0.7" opacity="@F(alpha * 0.7)" />
+            <!-- Light highlight on top of each cup (suggests roundness) -->
+            <path d="@($"M {F(140 - BustReach * 0.7)} {F(BustCenterY - 6)} Q {F(140 - BustReach * 0.3)} {F(BustCenterY - 10)} {F(140 - BustReach * 0.1)} {F(BustCenterY - 4)}")"
+                  stroke="#ffffff" stroke-width="1" fill="none" opacity="@F(alpha * 0.35)" />
+            <path d="@($"M {F(140 + BustReach * 0.1)} {F(BustCenterY - 4)} Q {F(140 + BustReach * 0.3)} {F(BustCenterY - 10)} {F(140 + BustReach * 0.7)} {F(BustCenterY - 6)}")"
+                  stroke="#ffffff" stroke-width="1" fill="none" opacity="@F(alpha * 0.35)" />
+        }
         <!-- Blouse cinched/tucked subtle shadow at waist -->
         <path d="@($"M {F(140 - Waist + 2)} {F(BlouseHemY - 6)} Q 140 {F(BlouseHemY - 1)} {F(140 + Waist - 2)} {F(BlouseHemY - 6)}")"
               stroke="@BlouseShade" stroke-width="0.8" fill="none" opacity="0.6" />
@@ -214,12 +232,20 @@
     }
 
     // ---- Blouse silhouette ----
+    // Bust width pushes the blouse outward at chest level.
+    double BustBulge => S.Bust * 0.18;
+    // Higher chest tone lifts the cup line; heavier bust drops it.
+    double BustCenterY => 184 + S.Bust * 0.10 - S.ChestTone * 0.10;
+    // Outer reach of each cup from center.
+    double BustReach => 10 + S.Bust * 0.18;
+
     string BlousePath
     {
         get
         {
             var S0 = Shoulders;
             var W = Waist + 2;
+            var bulge = BustBulge;
             return string.Format(CultureInfo.InvariantCulture,
                 "M {0:0.0} 124 " +
                 "L {1:0.0} 124 " +
@@ -233,9 +259,9 @@
                 Cx - 7,
                 Cx + 7,
                 Cx + S0 - 2,
-                Cx + S0 + 2, Cx + W + 4, Cx + W, BlouseHemY,
+                Cx + S0 + bulge + 2, Cx + W + 4, Cx + W, BlouseHemY,
                 Cx - W,
-                Cx - W - 4, Cx - S0 - 2);
+                Cx - W - 4, Cx - S0 - bulge - 2);
         }
     }
 

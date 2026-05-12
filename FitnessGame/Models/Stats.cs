@@ -26,6 +26,10 @@ public class Stats
 
     public int Followers { get; set; } = 1200;     // Instagram followers
 
+    // Bust is fat-driven with a firmness boost from pectoral tone.
+    // 0..100 represents from flat to very full.
+    public double Bust => Math.Clamp(12 + BodyFat * 1.1 + (ChestTone - 25) * 0.20, 0, 100);
+
     public double Clamp(double v) => Math.Clamp(v, 0, 100);
 
     public void Normalize()
