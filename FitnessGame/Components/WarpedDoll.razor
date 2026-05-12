@@ -12,29 +12,7 @@
 @if (ShowDebug && _mesh is not null)
 {
     <div class="warp-debug">
-        <div class="warp-debug-head">
-            Morph debug
-            <label style="margin-left:10px; font-weight:400;">
-                <input type="checkbox" checked="@_showOverlay"
-                       @onchange="e => { _showOverlay = (bool)e.Value!; _ = Redraw(); }" />
-                show anchors
-            </label>
-        </div>
-        <div class="warp-row">
-            <span class="warp-label">global</span>
-            <label>X
-                <input type="range" min="-0.10" max="0.10" step="0.002"
-                       value="@F(_globalDx)"
-                       @oninput="e => OnGlobal(true, e.Value)" />
-                <span>@F(_globalDx)</span>
-            </label>
-            <label>Y
-                <input type="range" min="-0.10" max="0.10" step="0.002"
-                       value="@F(_globalDy)"
-                       @oninput="e => OnGlobal(false, e.Value)" />
-                <span>@F(_globalDy)</span>
-            </label>
-        </div>
+        <div class="warp-debug-head">Morph debug</div>
         @foreach (var g in _mesh.MorphGroups)
         {
             var key = g.Id;
@@ -71,9 +49,6 @@
 
     readonly Dictionary<string, double> _debugDx = new();
     readonly Dictionary<string, double> _debugDy = new();
-    bool _showOverlay = true;
-    double _globalDx;
-    double _globalDy;
 
     // Buffer reused each frame.
     double[]? _verts;
@@ -82,7 +57,7 @@
     {
         if (!firstRender) return;
 
-        _mesh = await Http.GetFromJsonAsync<MeshData>("assets/Alice.data.json")
+        _mesh = await LoadMeshNoCache()
                 ?? throw new InvalidOperationException("Failed to load Alice.data.json");
 
         _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/warp.js");
@@ -96,6 +71,20 @@
     protected override async Task OnParametersSetAsync()
     {
         if (_initialized) await Redraw();
+    }
+
+    async Task<MeshData?> LoadMeshNoCache()
+    {
+        var url = $"assets/Alice.data.json?t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.SetBrowserRequestCache(BrowserRequestCache.NoStore);
+        req.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+        {
+            NoCache = true, NoStore = true, MustRevalidate = true
+        };
+        var resp = await Http.SendAsync(req);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<MeshData>();
     }
 
     async Task Redraw()
@@ -119,24 +108,6 @@
                 _verts[k] = u + dx;
                 _verts[k + 1] = v + dy;
             }
-        }
-
-        // Optional debug overlay: control points (red) + static anchors (cyan).
-        // Markers use the SAME global offset that's applied in BuildControlPoints
-        // so what you see is what's actually pinning/morphing.
-        if (_showOverlay)
-        {
-            var markers = new List<object>();
-            foreach (var g in _mesh.MorphGroups)
-                foreach (var cp in g.ControlPoints)
-                    markers.Add(new { x = cp.X + _globalDx, y = cp.Y + _globalDy, color = "#ff3366", label = g.Id });
-            foreach (var a in _mesh.StaticAnchors)
-                markers.Add(new { x = a.X + _globalDx, y = a.Y + _globalDy, color = "#33ddff", label = "pin" });
-            await _module.InvokeVoidAsync("setOverlay", _canvasId, markers);
-        }
-        else
-        {
-            await _module.InvokeVoidAsync("setOverlay", _canvasId, (object?)null);
         }
 
         await _module.InvokeVoidAsync("render", _canvasId, _verts, GridN);
@@ -193,14 +164,14 @@
                 double sign = cp.Side switch { "left" => -1, "right" => +1, _ => 0 };
                 double dx = sign * (gdx + sx);
                 double dy = (gdy + sy);
-                list.Add(new Cp(cp.X + _globalDx, cp.Y + _globalDy, dx, dy, cp.BaseWeight, cp.InfluenceRadius));
+                list.Add(new Cp(cp.X, cp.Y, dx, dy, cp.BaseWeight, cp.InfluenceRadius));
             }
         }
 
         foreach (var a in _mesh.StaticAnchors)
         {
             // Pin: zero offset, modest weight, generous radius so head/arms/feet stay put.
-            list.Add(new Cp(a.X + _globalDx, a.Y + _globalDy, 0, 0, 1.5, 0.18));
+            list.Add(new Cp(a.X, a.Y, 0, 0, 1.5, 0.18));
         }
         return list;
     }
@@ -226,13 +197,6 @@
             ws += w;
         }
         return ws > 1e-6 ? (wx / ws, wy / ws) : (0, 0);
-    }
-
-    void OnGlobal(bool isX, object? raw)
-    {
-        if (!double.TryParse(raw?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) return;
-        if (isX) _globalDx = v; else _globalDy = v;
-        _ = Redraw();
     }
 
     void OnDebug(string key, bool isX, object? raw)

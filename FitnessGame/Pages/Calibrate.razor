@@ -1,0 +1,281 @@
+@page "/calibrate"
+@using System.Globalization
+@using System.Net.Http.Json
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Http
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Calibrate Alice mesh</PageTitle>
+
+<div class="calibrate-shell">
+    <header class="topbar">
+        <h1>Calibrate Alice anchors</h1>
+        <a class="reset" href="/">← Back to game</a>
+        <button class="primary" @onclick="Download" disabled="@(_data is null)">Download JSON</button>
+        <button class="reset" @onclick="Reload">Reload from server</button>
+    </header>
+
+    @if (_data is null)
+    {
+        <p style="padding:20px;">Loading…</p>
+    }
+    else
+    {
+        <div class="calibrate-layout">
+            <div class="canvas-wrap">
+                <svg id="@SvgId" viewBox="0 0 @ImgW @ImgH" class="calibrate-svg"
+                     @onpointermove="OnMove" @onpointerup="OnUp" @onpointerleave="OnUp">
+                    <image href="assets/Alice.png" x="0" y="0" width="@ImgW" height="@ImgH" />
+
+                    @* Control points (red) *@
+                    @for (int gi = 0; gi < _data.MorphGroups.Count; gi++)
+                    {
+                        var g = _data.MorphGroups[gi];
+                        var groupIndex = gi;
+                        for (int ci = 0; ci < g.ControlPoints.Count; ci++)
+                        {
+                            var cp = g.ControlPoints[ci];
+                            var cpIndex = ci;
+                            var id = $"cp:{groupIndex}:{cpIndex}";
+                            var selected = _selected == id;
+                            <g transform="@T(cp.X, cp.Y)">
+                                <circle r="18" fill="#ff3366" fill-opacity="@(selected ? "0.9" : "0.55")"
+                                        stroke="#fff" stroke-width="@(selected ? "3" : "1.5")"
+                                        style="cursor:grab;"
+                                        @onpointerdown="e => BeginDrag(id, e)"
+                                        @onpointerdown:stopPropagation="true" />
+                                <text y="-22" text-anchor="middle" fill="#fff" font-size="18"
+                                      style="text-shadow:0 0 3px #000;paint-order:stroke;stroke:#000;stroke-width:3;">
+                                    @g.Id@(cp.Side != "center" ? $" {cp.Side[0]}" : "")
+                                </text>
+                            </g>
+                        }
+                    }
+
+                    @* Static anchors (cyan) *@
+                    @for (int ai = 0; ai < _data.StaticAnchors.Count; ai++)
+                    {
+                        var a = _data.StaticAnchors[ai];
+                        var anchorIndex = ai;
+                        var id = $"an:{anchorIndex}";
+                        var selected = _selected == id;
+                        <g transform="@T(a.X, a.Y)">
+                            <circle r="18" fill="#33ddff" fill-opacity="@(selected ? "0.9" : "0.55")"
+                                    stroke="#fff" stroke-width="@(selected ? "3" : "1.5")"
+                                    style="cursor:grab;"
+                                    @onpointerdown="e => BeginDrag(id, e)"
+                                    @onpointerdown:stopPropagation="true" />
+                            <text y="-22" text-anchor="middle" fill="#fff" font-size="18"
+                                  style="text-shadow:0 0 3px #000;paint-order:stroke;stroke:#000;stroke-width:3;">
+                                @ShortAnchorLabel(a)
+                            </text>
+                        </g>
+                    }
+                </svg>
+            </div>
+
+            <aside class="calibrate-side">
+                <h2>How to use</h2>
+                <ol class="hint">
+                    <li>Drag the red dots onto the body features they morph (breast, waist, hips, etc.).</li>
+                    <li>Drag the cyan dots onto the pins that should stay still (head, elbows, hands, feet).</li>
+                    <li>Click <strong>Download JSON</strong> and replace <code>wwwroot/assets/Alice.data.json</code>.</li>
+                </ol>
+
+                @if (_selected is not null && _selectedInfo is { } info)
+                {
+                    <h2>Selected</h2>
+                    <div class="sel-info">
+                        <div><strong>@info.Name</strong></div>
+                        <div>x = @F(info.X)</div>
+                        <div>y = @F(info.Y)</div>
+                    </div>
+                }
+
+                <h2>All points</h2>
+                <div class="all-list">
+                    @foreach (var g in _data.MorphGroups)
+                    {
+                        <div class="ap-group">
+                            <strong style="color:#ff8aa6;">@g.Id</strong>
+                            @foreach (var cp in g.ControlPoints)
+                            {
+                                <div>@cp.Side: (@F(cp.X), @F(cp.Y))</div>
+                            }
+                        </div>
+                    }
+                    <div class="ap-group">
+                        <strong style="color:#7ddfff;">anchors</strong>
+                        @foreach (var a in _data.StaticAnchors)
+                        {
+                            <div>(@F(a.X), @F(a.Y)) — @a.Description</div>
+                        }
+                    </div>
+                </div>
+            </aside>
+        </div>
+    }
+</div>
+
+@code {
+    const int ImgW = 832;
+    const int ImgH = 1216;
+    const string SvgId = "calibrate-svg";
+
+    MeshData? _data;
+    IJSObjectReference? _module;
+    string? _selected; // e.g. "cp:1:0" or "an:2"
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/download.js");
+    }
+
+    async Task Reload()
+    {
+        // Bypass browser HTTP cache: cache-busting query + no-store fetch option.
+        var url = $"assets/Alice.data.json?t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.SetBrowserRequestCache(BrowserRequestCache.NoStore);
+        req.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+        {
+            NoCache = true, NoStore = true, MustRevalidate = true
+        };
+        var resp = await Http.SendAsync(req);
+        resp.EnsureSuccessStatusCode();
+        _data = await resp.Content.ReadFromJsonAsync<MeshData>();
+        _selected = null;
+        StateHasChanged();
+    }
+
+    void BeginDrag(string id, PointerEventArgs e)
+    {
+        _selected = id;
+    }
+
+    async Task OnMove(PointerEventArgs e)
+    {
+        if (_selected is null || _data is null) return;
+        // PointerEventArgs.Buttons: bit 0 set means primary button still down.
+        if ((e.Buttons & 1) == 0) return;
+
+        if (_module is null) return;
+        var pt = await _module.InvokeAsync<JsonElement?>("svgPoint", SvgId, e.ClientX, e.ClientY);
+        if (pt is null) return;
+
+        var nx = Math.Clamp(pt.Value.GetProperty("x").GetDouble() / ImgW, 0, 1);
+        var ny = Math.Clamp(pt.Value.GetProperty("y").GetDouble() / ImgH, 0, 1);
+        SetPoint(_selected, nx, ny);
+        StateHasChanged();
+    }
+
+    void OnUp(PointerEventArgs e)
+    {
+        // Keep selection visible, just stop dragging by not requiring an extra flag.
+        // (OnMove already gates on button-down.)
+    }
+
+    void SetPoint(string id, double x, double y)
+    {
+        if (_data is null) return;
+        var parts = id.Split(':');
+        if (parts[0] == "cp")
+        {
+            var g = _data.MorphGroups[int.Parse(parts[1])];
+            var cp = g.ControlPoints[int.Parse(parts[2])];
+            cp.X = x; cp.Y = y;
+        }
+        else if (parts[0] == "an")
+        {
+            var a = _data.StaticAnchors[int.Parse(parts[1])];
+            a.X = x; a.Y = y;
+        }
+    }
+
+    (string Name, double X, double Y)? _selectedInfo
+    {
+        get
+        {
+            if (_selected is null || _data is null) return null;
+            var parts = _selected.Split(':');
+            if (parts[0] == "cp")
+            {
+                var g = _data.MorphGroups[int.Parse(parts[1])];
+                var cp = g.ControlPoints[int.Parse(parts[2])];
+                return ($"{g.Id} ({cp.Side})", cp.X, cp.Y);
+            }
+            else
+            {
+                var a = _data.StaticAnchors[int.Parse(parts[1])];
+                return (a.Description, a.X, a.Y);
+            }
+        }
+    }
+
+    async Task Download()
+    {
+        if (_data is null || _module is null) return;
+        var opts = new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+        var json = JsonSerializer.Serialize(_data, opts);
+        await _module.InvokeVoidAsync("download", "Alice.data.json", json, "application/json");
+    }
+
+    static string T(double x, double y) => string.Format(CultureInfo.InvariantCulture, "translate({0:0.0} {1:0.0})", x * ImgW, y * ImgH);
+    static string F(double v) => v.ToString("0.000", CultureInfo.InvariantCulture);
+    static string ShortAnchorLabel(Anchor a) => a.Description switch
+    {
+        var s when s.Contains("head") => "head",
+        var s when s.Contains("left_elbow") => "L-elbow",
+        var s when s.Contains("right_elbow") => "R-elbow",
+        var s when s.Contains("left_hand") => "L-hand",
+        var s when s.Contains("right_hand") => "R-hand",
+        var s when s.Contains("left_foot") => "L-foot",
+        var s when s.Contains("right_foot") => "R-foot",
+        var s when s.Contains("left_arm") => "L-arm",
+        var s when s.Contains("right_arm") => "R-arm",
+        _ => "pin"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try { await _module.DisposeAsync(); } catch { }
+        }
+    }
+
+    public class MeshData
+    {
+        [JsonPropertyName("mesh_metadata")] public JsonElement? MeshMetadata { get; set; }
+        [JsonPropertyName("morph_groups")] public List<MorphGroup> MorphGroups { get; set; } = new();
+        [JsonPropertyName("static_anchors")] public List<Anchor> StaticAnchors { get; set; } = new();
+    }
+    public class MorphGroup
+    {
+        [JsonPropertyName("id")] public string Id { get; set; } = "";
+        [JsonPropertyName("description")] public string? Description { get; set; }
+        [JsonPropertyName("control_points")] public List<ControlPoint> ControlPoints { get; set; } = new();
+    }
+    public class ControlPoint
+    {
+        [JsonPropertyName("side")] public string Side { get; set; } = "center";
+        [JsonPropertyName("x")] public double X { get; set; }
+        [JsonPropertyName("y")] public double Y { get; set; }
+        [JsonPropertyName("base_weight")] public double BaseWeight { get; set; } = 1;
+        [JsonPropertyName("influence_radius")] public double InfluenceRadius { get; set; } = 0.1;
+    }
+    public class Anchor
+    {
+        [JsonPropertyName("x")] public double X { get; set; }
+        [JsonPropertyName("y")] public double Y { get; set; }
+        [JsonPropertyName("description")] public string Description { get; set; } = "";
+    }
+}

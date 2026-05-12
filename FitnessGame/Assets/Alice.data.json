@@ -10,57 +10,151 @@
       "id": "breast",
       "description": "Morphs the chest volume",
       "control_points": [
-        {"side": "left",  "x": 0.450, "y": 0.275, "base_weight": 1.0, "influence_radius": 0.10},
-        {"side": "right", "x": 0.555, "y": 0.275, "base_weight": 1.0, "influence_radius": 0.10}
+        {
+          "side": "left",
+          "x": 0.4802570343017578,
+          "y": 0.30032494193629217,
+          "base_weight": 1,
+          "influence_radius": 0.1
+        },
+        {
+          "side": "right",
+          "x": 0.6152437650240384,
+          "y": 0.30032494193629217,
+          "base_weight": 1,
+          "influence_radius": 0.1
+        }
       ]
     },
     {
       "id": "waist",
       "description": "Adjusts the width of the midsection (skirt waistband line)",
       "control_points": [
-        {"side": "left",  "x": 0.400, "y": 0.400, "base_weight": 0.85, "influence_radius": 0.08},
-        {"side": "right", "x": 0.600, "y": 0.400, "base_weight": 0.85, "influence_radius": 0.08}
+        {
+          "side": "left",
+          "x": 0.4857667042658879,
+          "y": 0.355614888040643,
+          "base_weight": 0.85,
+          "influence_radius": 0.08
+        },
+        {
+          "side": "right",
+          "x": 0.6078975750849798,
+          "y": 0.355614888040643,
+          "base_weight": 0.85,
+          "influence_radius": 0.08
+        }
       ]
     },
     {
       "id": "abs",
       "description": "Central torso definition just above the skirt",
       "control_points": [
-        {"side": "center", "x": 0.500, "y": 0.370, "base_weight": 1.0, "influence_radius": 0.06}
+        {
+          "side": "center",
+          "x": 0.5426998872023362,
+          "y": 0.41844438251696137,
+          "base_weight": 1,
+          "influence_radius": 0.06
+        }
       ]
     },
     {
       "id": "hips",
       "description": "Widest point of the skirt / hipline",
       "control_points": [
-        {"side": "left",  "x": 0.380, "y": 0.470, "base_weight": 0.9, "influence_radius": 0.11},
-        {"side": "right", "x": 0.620, "y": 0.470, "base_weight": 0.9, "influence_radius": 0.11}
+        {
+          "side": "left",
+          "x": 0.4113862697894757,
+          "y": 0.47750407771060344,
+          "base_weight": 0.9,
+          "influence_radius": 0.11
+        },
+        {
+          "side": "right",
+          "x": 0.6776866179246169,
+          "y": 0.47876066910593135,
+          "base_weight": 0.9,
+          "influence_radius": 0.11
+        }
       ]
     },
     {
       "id": "thighs",
       "description": "Upper-leg thickness just below the skirt hem",
       "control_points": [
-        {"side": "left",  "x": 0.430, "y": 0.650, "base_weight": 1.0, "influence_radius": 0.10},
-        {"side": "right", "x": 0.570, "y": 0.650, "base_weight": 1.0, "influence_radius": 0.10}
+        {
+          "side": "left",
+          "x": 0.46556461774385893,
+          "y": 0.5717483319734272,
+          "base_weight": 1,
+          "influence_radius": 0.1
+        },
+        {
+          "side": "right",
+          "x": 0.6280996616070087,
+          "y": 0.5704917405780993,
+          "base_weight": 1,
+          "influence_radius": 0.1
+        }
       ]
     },
     {
       "id": "calves",
       "description": "Lower-leg thickness",
       "control_points": [
-        {"side": "left",  "x": 0.450, "y": 0.860, "base_weight": 0.9, "influence_radius": 0.07},
-        {"side": "right", "x": 0.550, "y": 0.860, "base_weight": 0.9, "influence_radius": 0.07}
+        {
+          "side": "left",
+          "x": 0.4802570343017578,
+          "y": 0.763378243697317,
+          "base_weight": 0.9,
+          "influence_radius": 0.07
+        },
+        {
+          "side": "right",
+          "x": 0.6134072083693284,
+          "y": 0.7614933817010177,
+          "base_weight": 0.9,
+          "influence_radius": 0.07
+        }
       ]
     }
   ],
   "static_anchors": [
-    {"x": 0.500, "y": 0.100, "description": "head_anchor_prevents_warping"},
-    {"x": 0.230, "y": 0.340, "description": "left_elbow_anchor"},
-    {"x": 0.770, "y": 0.340, "description": "right_elbow_anchor"},
-    {"x": 0.325, "y": 0.405, "description": "left_hand_on_hip_anchor"},
-    {"x": 0.675, "y": 0.405, "description": "right_hand_on_hip_anchor"},
-    {"x": 0.470, "y": 0.970, "description": "left_foot_anchor"},
-    {"x": 0.555, "y": 0.970, "description": "right_foot_anchor"}
+    {
+      "x": 0.5408633305476263,
+      "y": 0.11057989220870168,
+      "description": "head_anchor_prevents_warping"
+    },
+    {
+      "x": 0.315885433783898,
+      "y": 0.2990683505409642,
+      "description": "left_elbow_anchor"
+    },
+    {
+      "x": 0.767677747286283,
+      "y": 0.2984400548433003,
+      "description": "right_elbow_anchor"
+    },
+    {
+      "x": 0.3930207032423753,
+      "y": 0.3732071424785413,
+      "description": "left_hand_on_hip_anchor"
+    },
+    {
+      "x": 0.7033984110905573,
+      "y": 0.36503932350560236,
+      "description": "right_hand_on_hip_anchor"
+    },
+    {
+      "x": 0.508723625769982,
+      "y": 0.9298764279014186,
+      "description": "left_foot_anchor"
+    },
+    {
+      "x": 0.5913685651925894,
+      "y": 0.9305046483090049,
+      "description": "right_foot_anchor"
+    }
   ]
 }
