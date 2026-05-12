@@ -1,0 +1,30 @@
+@using System.Globalization
+
+<div class="statbar @(Slim ? "slim" : "")">
+    <div class="label">@Label</div>
+    <div class="track">
+        <div class="fill" style="width: @(Pct.ToString("0.0", CultureInfo.InvariantCulture))%; background: @Color;"></div>
+    </div>
+    <div class="value">@Value.ToString("0.#")@(string.IsNullOrEmpty(Unit) ? "" : Unit)</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public double Value { get; set; }
+    [Parameter] public double Min { get; set; } = 0;
+    [Parameter] public double Max { get; set; } = 100;
+    [Parameter] public string Unit { get; set; } = "";
+    [Parameter] public string Color { get; set; } = "#7ab";
+    [Parameter] public bool Invert { get; set; } = false;
+    [Parameter] public bool Slim { get; set; } = false;
+
+    double Pct
+    {
+        get
+        {
+            var raw = (Value - Min) / (Max - Min);
+            raw = Math.Clamp(raw, 0, 1);
+            return (Invert ? (1 - raw) : raw) * 100;
+        }
+    }
+}
