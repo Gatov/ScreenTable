@@ -15,7 +15,12 @@
 
         <!-- Left: paper doll + headline numbers -->
         <section class="doll-panel">
-            <PaperDoll S="Engine.Stats" />
+            <div class="commit commit-top">
+                <button class="primary" disabled="@( _activity is null || _foods.Count == 0)" @onclick="Commit">
+                    End the day →
+                </button>
+            </div>
+            <WarpedDoll S="Engine.Stats" ShowDebug="true" />
             <div class="doll-tagline">
                 <span class="ig">@@you_get_fit</span>
                 <span class="followers">@FormatFollowers(Engine.Stats.Followers) followers</span>
@@ -104,12 +109,6 @@
                 {
                     <button class="link-btn" @onclick="() => _foods.Clear()">Clear meals</button>
                 }
-            </div>
-
-            <div class="commit">
-                <button class="primary" disabled="@( _activity is null || _foods.Count == 0)" @onclick="Commit">
-                    End the day →
-                </button>
             </div>
 
             @if (Engine.LastTurn is { } turn)

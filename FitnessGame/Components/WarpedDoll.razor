@@ -1,0 +1,287 @@
+@using System.Net.Http.Json
+@using System.Text.Json.Serialization
+@using System.Globalization
+@inject HttpClient Http
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="warped-doll">
+    <canvas id="@_canvasId" width="280" height="560" class="doll-canvas"></canvas>
+</div>
+
+@if (ShowDebug && _mesh is not null)
+{
+    <div class="warp-debug">
+        <div class="warp-debug-head">
+            Morph debug
+            <label style="margin-left:10px; font-weight:400;">
+                <input type="checkbox" checked="@_showOverlay"
+                       @onchange="e => { _showOverlay = (bool)e.Value!; _ = Redraw(); }" />
+                show anchors
+            </label>
+        </div>
+        <div class="warp-row">
+            <span class="warp-label">global</span>
+            <label>X
+                <input type="range" min="-0.10" max="0.10" step="0.002"
+                       value="@F(_globalDx)"
+                       @oninput="e => OnGlobal(true, e.Value)" />
+                <span>@F(_globalDx)</span>
+            </label>
+            <label>Y
+                <input type="range" min="-0.10" max="0.10" step="0.002"
+                       value="@F(_globalDy)"
+                       @oninput="e => OnGlobal(false, e.Value)" />
+                <span>@F(_globalDy)</span>
+            </label>
+        </div>
+        @foreach (var g in _mesh.MorphGroups)
+        {
+            var key = g.Id;
+            <div class="warp-row">
+                <span class="warp-label">@key</span>
+                <label>X
+                    <input type="range" min="-0.15" max="0.15" step="0.005"
+                           value="@F(_debugDx.GetValueOrDefault(key))"
+                           @oninput="e => OnDebug(key, true, e.Value)" />
+                    <span>@F(_debugDx.GetValueOrDefault(key))</span>
+                </label>
+                <label>Y
+                    <input type="range" min="-0.15" max="0.15" step="0.005"
+                           value="@F(_debugDy.GetValueOrDefault(key))"
+                           @oninput="e => OnDebug(key, false, e.Value)" />
+                    <span>@F(_debugDy.GetValueOrDefault(key))</span>
+                </label>
+            </div>
+        }
+        <button class="link-btn" @onclick="ResetDebug">Reset sliders</button>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Stats S { get; set; } = new();
+    [Parameter] public bool ShowDebug { get; set; }
+
+    const int GridN = 50;
+    readonly string _canvasId = "warped-doll-" + Guid.NewGuid().ToString("N")[..8];
+
+    IJSObjectReference? _module;
+    MeshData? _mesh;
+    bool _initialized;
+
+    readonly Dictionary<string, double> _debugDx = new();
+    readonly Dictionary<string, double> _debugDy = new();
+    bool _showOverlay = true;
+    double _globalDx;
+    double _globalDy;
+
+    // Buffer reused each frame.
+    double[]? _verts;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _mesh = await Http.GetFromJsonAsync<MeshData>("assets/Alice.data.json")
+                ?? throw new InvalidOperationException("Failed to load Alice.data.json");
+
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/warp.js");
+        await _module.InvokeAsync<object>("init", _canvasId, "assets/Alice.png");
+
+        _initialized = true;
+        StateHasChanged(); // show the debug panel now that _mesh is populated
+        await Redraw();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_initialized) await Redraw();
+    }
+
+    async Task Redraw()
+    {
+        if (_module is null || _mesh is null) return;
+
+        // 1) Compute current per-control-point offsets from Stats + debug sliders.
+        var cps = BuildControlPoints();
+
+        // 2) Build warped vertex grid.
+        var stride = GridN + 1;
+        _verts ??= new double[stride * stride * 2];
+        for (int j = 0; j <= GridN; j++)
+        {
+            double v = (double)j / GridN;
+            for (int i = 0; i <= GridN; i++)
+            {
+                double u = (double)i / GridN;
+                var (dx, dy) = Warp(u, v, cps);
+                int k = (j * stride + i) * 2;
+                _verts[k] = u + dx;
+                _verts[k + 1] = v + dy;
+            }
+        }
+
+        // Optional debug overlay: control points (red) + static anchors (cyan).
+        // Markers use the SAME global offset that's applied in BuildControlPoints
+        // so what you see is what's actually pinning/morphing.
+        if (_showOverlay)
+        {
+            var markers = new List<object>();
+            foreach (var g in _mesh.MorphGroups)
+                foreach (var cp in g.ControlPoints)
+                    markers.Add(new { x = cp.X + _globalDx, y = cp.Y + _globalDy, color = "#ff3366", label = g.Id });
+            foreach (var a in _mesh.StaticAnchors)
+                markers.Add(new { x = a.X + _globalDx, y = a.Y + _globalDy, color = "#33ddff", label = "pin" });
+            await _module.InvokeVoidAsync("setOverlay", _canvasId, markers);
+        }
+        else
+        {
+            await _module.InvokeVoidAsync("setOverlay", _canvasId, (object?)null);
+        }
+
+        await _module.InvokeVoidAsync("render", _canvasId, _verts, GridN);
+    }
+
+    // ---- Stats -> morph-group (dx, dy) offsets in normalized image space.
+    // Mirrors the silhouette logic from the old PaperDoll; values around
+    // ±0.05 give a clearly visible warp without breaking the photo.
+    (double dx, double dy) GroupOffset(string id)
+    {
+        double dx = 0, dy = 0;
+        switch (id)
+        {
+            case "breast":
+                // Bust 0..100, neutral ~ 45 (=12 + 24*1.1 + 0)
+                dx = (S.Bust - 45) * 0.0010;
+                dy = (S.Bust - 45) * 0.0004;
+                break;
+            case "waist":
+                // Wider with body fat, tighter with abs tone. Neutral ~ 0.
+                dx = ((S.BodyFat - 24) * 0.0018 - (S.AbsTone - 25) * 0.0008);
+                break;
+            case "abs":
+                // Tighter abs pulls center inward (negative y == up); use dy for definition.
+                dy = -(S.AbsTone - 25) * 0.0006;
+                break;
+            case "hips":
+                // Wider with body fat and glute tone.
+                dx = ((S.BodyFat - 24) * 0.0020 + (S.GluteTone - 30) * 0.0014);
+                break;
+            case "thighs":
+                dx = ((S.BodyFat - 24) * 0.0020 + (S.LegsTone - 25) * 0.0008);
+                break;
+            case "calves":
+                dx = ((S.BodyFat - 24) * 0.0010 + (S.LegsTone - 25) * 0.0006);
+                break;
+        }
+        return (dx, dy);
+    }
+
+    List<Cp> BuildControlPoints()
+    {
+        var list = new List<Cp>();
+        if (_mesh is null) return list;
+
+        foreach (var g in _mesh.MorphGroups)
+        {
+            var (gdx, gdy) = GroupOffset(g.Id);
+            var sx = _debugDx.GetValueOrDefault(g.Id);
+            var sy = _debugDy.GetValueOrDefault(g.Id);
+            foreach (var cp in g.ControlPoints)
+            {
+                // Sided points push outward: left -> -X, right -> +X, center neutral.
+                double sign = cp.Side switch { "left" => -1, "right" => +1, _ => 0 };
+                double dx = sign * (gdx + sx);
+                double dy = (gdy + sy);
+                list.Add(new Cp(cp.X + _globalDx, cp.Y + _globalDy, dx, dy, cp.BaseWeight, cp.InfluenceRadius));
+            }
+        }
+
+        foreach (var a in _mesh.StaticAnchors)
+        {
+            // Pin: zero offset, modest weight, generous radius so head/arms/feet stay put.
+            list.Add(new Cp(a.X + _globalDx, a.Y + _globalDy, 0, 0, 1.5, 0.18));
+        }
+        return list;
+    }
+
+    static double Smoothstep(double t)
+    {
+        t = Math.Clamp(t, 0, 1);
+        return t * t * (3 - 2 * t);
+    }
+
+    static (double dx, double dy) Warp(double x, double y, IList<Cp> cps)
+    {
+        double wx = 0, wy = 0, ws = 0;
+        foreach (var c in cps)
+        {
+            double ddx = x - c.X, ddy = y - c.Y;
+            double d = Math.Sqrt(ddx * ddx + ddy * ddy);
+            double t = d / c.Radius;
+            if (t >= 1) continue;
+            double w = c.Weight * (1 - Smoothstep(t));
+            wx += w * c.Dx;
+            wy += w * c.Dy;
+            ws += w;
+        }
+        return ws > 1e-6 ? (wx / ws, wy / ws) : (0, 0);
+    }
+
+    void OnGlobal(bool isX, object? raw)
+    {
+        if (!double.TryParse(raw?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) return;
+        if (isX) _globalDx = v; else _globalDy = v;
+        _ = Redraw();
+    }
+
+    void OnDebug(string key, bool isX, object? raw)
+    {
+        if (!double.TryParse(raw?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) return;
+        (isX ? _debugDx : _debugDy)[key] = v;
+        _ = Redraw();
+    }
+
+    void ResetDebug()
+    {
+        _debugDx.Clear();
+        _debugDy.Clear();
+        _ = Redraw();
+    }
+
+    static string F(double v) => v.ToString("0.000", CultureInfo.InvariantCulture);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try { await _module.DisposeAsync(); } catch { }
+        }
+    }
+
+    record Cp(double X, double Y, double Dx, double Dy, double Weight, double Radius);
+
+    class MeshData
+    {
+        [JsonPropertyName("morph_groups")] public List<MorphGroup> MorphGroups { get; set; } = new();
+        [JsonPropertyName("static_anchors")] public List<Anchor> StaticAnchors { get; set; } = new();
+    }
+    class MorphGroup
+    {
+        [JsonPropertyName("id")] public string Id { get; set; } = "";
+        [JsonPropertyName("control_points")] public List<ControlPoint> ControlPoints { get; set; } = new();
+    }
+    class ControlPoint
+    {
+        [JsonPropertyName("side")] public string Side { get; set; } = "center";
+        [JsonPropertyName("x")] public double X { get; set; }
+        [JsonPropertyName("y")] public double Y { get; set; }
+        [JsonPropertyName("base_weight")] public double BaseWeight { get; set; } = 1;
+        [JsonPropertyName("influence_radius")] public double InfluenceRadius { get; set; } = 0.1;
+    }
+    class Anchor
+    {
+        [JsonPropertyName("x")] public double X { get; set; }
+        [JsonPropertyName("y")] public double Y { get; set; }
+    }
+}
