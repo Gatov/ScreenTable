@@ -5,7 +5,7 @@ namespace FitnessGame.Services;
 public class TurnResult
 {
     public Activity Activity { get; init; } = default!;
-    public Food Food { get; init; } = default!;
+    public IReadOnlyList<Food> Foods { get; init; } = Array.Empty<Food>();
     public int CaloriesIn { get; init; }
     public int CaloriesOut { get; init; }
     public int Delta => CaloriesIn - CaloriesOut;
@@ -30,10 +30,26 @@ public class GameEngine
         Changed?.Invoke();
     }
 
-    public TurnResult AdvanceDay(Activity activity, Food food)
+    public TurnResult AdvanceDay(Activity activity, IReadOnlyList<Food> foods)
     {
+        if (foods is null || foods.Count == 0)
+            throw new ArgumentException("At least one meal is required.", nameof(foods));
+
         var before = Stats.Clone();
         var log = new List<string>();
+
+        var totalCalories = foods.Sum(f => f.Calories);
+        var totalProtein  = foods.Sum(f => f.Protein);
+
+        // Aggregate food acts as the day's intake for training/protein calculations.
+        var aggregate = new Food
+        {
+            Name = string.Join(" + ", foods.Select(f => f.Name)),
+            Calories = totalCalories,
+            Protein  = totalProtein,
+            Carbs    = foods.Sum(f => f.Carbs),
+            Fat      = foods.Sum(f => f.Fat),
+        };
 
         // --- Energy ---
         // Negative EnergyCost = recovery, positive = drain.
@@ -42,21 +58,29 @@ public class GameEngine
         // --- Calorie balance => fat/muscle drift ---
         // ~7700 kcal per kg of fat. We split a portion into fat change and
         // a smaller portion into muscle change when training and protein is adequate.
-        var delta = food.Calories - activity.CaloriesBurned;
+        var delta = totalCalories - activity.CaloriesBurned;
         var fatKg = delta / 7700.0;
 
         Stats.BodyFat += fatKg * 1.2;                 // crude, but scales nicely
         Stats.Weight  += fatKg;
 
-        if (delta < 0) log.Add($"Calorie deficit of {-delta} kcal — fat trending down.");
+        if (delta < -200) log.Add($"Calorie deficit of {-delta} kcal — fat trending down.");
         else if (delta > 200) log.Add($"Calorie surplus of {delta} kcal — fat trending up.");
         else log.Add("Maintenance calories.");
 
         // --- Apply activity-specific effects ---
-        ApplyActivity(activity, food, log);
+        ApplyActivity(activity, aggregate, log);
 
         // --- Food quality side-effects ---
-        ApplyFood(food, activity, log);
+        foreach (var f in foods)
+            ApplyFood(f, activity, log);
+
+        // Low-protein muscle dip applies once for the whole day, not per meal.
+        if (totalProtein < 25 && activity.Kind.ToString().StartsWith("Train"))
+        {
+            Stats.MuscleMass -= 0.15;
+            log.Add("Low protein on a training day — muscle dip.");
+        }
 
         // --- Mood drift towards 50, energy drift ---
         if (Stats.Energy < 25) { Stats.Mood -= 3; log.Add("Low energy is tanking your mood."); }
@@ -92,8 +116,8 @@ public class GameEngine
         var result = new TurnResult
         {
             Activity = activity,
-            Food = food,
-            CaloriesIn = food.Calories,
+            Foods = foods.ToList(),
+            CaloriesIn = totalCalories,
             CaloriesOut = activity.CaloriesBurned,
             Before = before,
             After = Stats.Clone()
@@ -197,7 +221,7 @@ public class GameEngine
                 Stats.Mood   += 4;
                 Stats.Health -= 4;
                 Stats.Energy += 5;     // sugar rush
-                log.Add($"{food.Name}: delicious shame.");
+                log.Add($"{food.Emoji} {food.Name}: delicious shame.");
                 break;
             case FoodTier.Average:
                 Stats.Mood   += 1;
@@ -207,21 +231,14 @@ public class GameEngine
                 Stats.Mood   += 0;
                 Stats.Health += 3;
                 Stats.Energy += 4;
-                log.Add($"{food.Name}: clean fuel.");
+                log.Add($"{food.Emoji} {food.Name}: clean fuel.");
                 break;
             case FoodTier.Strict:
                 Stats.Mood   -= 3;
                 Stats.Health += 2;
-                Stats.Energy -= 2;
-                log.Add($"{food.Name}: discipline hurts.");
+                Stats.Energy += food.Calories == 0 ? -4 : -2;
+                log.Add($"{food.Emoji} {food.Name}: discipline hurts.");
                 break;
-        }
-
-        // Adequate protein supports muscle, low protein when training risks losing it.
-        if (food.Protein < 25 && activity.Kind.ToString().StartsWith("Train"))
-        {
-            Stats.MuscleMass -= 0.15;
-            log.Add("Low protein on a training day — muscle dip.");
         }
     }
 }
