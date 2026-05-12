@@ -40,7 +40,7 @@
     [Parameter, EditorRequired] public Stats S { get; set; } = new();
     [Parameter] public bool ShowDebug { get; set; }
 
-    const int GridN = 50;
+    const int GridN = 120;
     readonly string _canvasId = "warped-doll-" + Guid.NewGuid().ToString("N")[..8];
 
     IJSObjectReference? _module;
