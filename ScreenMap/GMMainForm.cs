@@ -1,5 +1,7 @@
-﻿using System.Drawing;
+﻿using System;
+using System.Drawing;
 using System.Net;
+using System.Threading;
 using System.Windows.Forms;
 using ScreenMap.Logic;
 using ScreenMap.Logic.Tools;
@@ -12,6 +14,7 @@ namespace ScreenMap
         enum Mode { Normal, Calibrate, Mark };
         Mode _currentMode;
         private ScreenMapWebServer _webServer;
+        private CloudflareTunnel _tunnel;
 
         public GMMainForm()
         {
@@ -49,7 +52,11 @@ namespace ScreenMap
                     "ScreenMap Web Server", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
 
-            FormClosed += (_, _) => _webServer.Dispose();
+            FormClosed += (_, _) =>
+            {
+                _webServer.Dispose();
+                _tunnel?.Dispose();
+            };
         }
 
         private void GmMapViewOnToolChange(ITool obj)
@@ -95,6 +102,42 @@ namespace ScreenMap
         private void barCheckItemGrid_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
         {
             gmMapView1.SetGridVisible(barCheckItemGrid.Checked);
+        }
+
+        private async void barButtonItemShare_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        {
+            if (_tunnel != null && _tunnel.IsRunning)
+            {
+                Clipboard.SetText(_tunnel.Url);
+                MessageBox.Show(
+                    $"Cloudflare tunnel is already running.\n\n{_tunnel.Url}\n\n(copied to clipboard)",
+                    "Share", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            barButtonItemShare.Enabled = false;
+            var tunnel = new CloudflareTunnel();
+            try
+            {
+                var url = await tunnel.StartAsync(ScreenMapWebServer.Port, TimeSpan.FromSeconds(20));
+                _tunnel = tunnel;
+                Clipboard.SetText(url);
+                barButtonItemShare.Caption = "Shared";
+                MessageBox.Show(
+                    $"Tunnel is live:\n\n{url}\n\n(copied to clipboard)",
+                    "Share", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                tunnel.Dispose();
+                MessageBox.Show(
+                    $"Could not start cloudflared tunnel.\n\n{ex.Message}",
+                    "Share", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                barButtonItemShare.Enabled = true;
+            }
         }
 
         private void barCheckItemMarks_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)

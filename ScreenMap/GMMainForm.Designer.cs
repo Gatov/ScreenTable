@@ -51,6 +51,7 @@ namespace ScreenMap
             barCheckItemCalibrate = new DevExpress.XtraBars.BarCheckItem();
             barCheckItemMarks = new DevExpress.XtraBars.BarCheckItem();
             barCheckItemGrid = new DevExpress.XtraBars.BarCheckItem();
+            barButtonItemShare = new DevExpress.XtraBars.BarButtonItem();
             barListItemBrushes = new DevExpress.XtraBars.BarListItem();
             bar3 = new DevExpress.XtraBars.Bar();
             barStaticItemHint = new DevExpress.XtraBars.BarStaticItem();
@@ -83,8 +84,8 @@ namespace ScreenMap
             barManager1.DockControls.Add(barDockControlLeft);
             barManager1.DockControls.Add(barDockControlRight);
             barManager1.Form = this;
-            barManager1.Items.AddRange(new DevExpress.XtraBars.BarItem[] { barCheckItemCalibrate, barButtonItemSave, barListItemBrushes, barCheckItemMarks, barStaticItemHint, barCheckItemGrid });
-            barManager1.MaxItemId = 8;
+            barManager1.Items.AddRange(new DevExpress.XtraBars.BarItem[] { barCheckItemCalibrate, barButtonItemSave, barListItemBrushes, barCheckItemMarks, barStaticItemHint, barCheckItemGrid, barButtonItemShare });
+            barManager1.MaxItemId = 9;
             barManager1.StatusBar = bar3;
             // 
             // bar1
@@ -93,7 +94,7 @@ namespace ScreenMap
             bar1.DockCol = 0;
             bar1.DockRow = 0;
             bar1.DockStyle = DevExpress.XtraBars.BarDockStyle.Top;
-            bar1.LinksPersistInfo.AddRange(new DevExpress.XtraBars.LinkPersistInfo[] { new DevExpress.XtraBars.LinkPersistInfo(barButtonItemSave), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemCalibrate, true), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemMarks), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemGrid, true), new DevExpress.XtraBars.LinkPersistInfo(barListItemBrushes, true) });
+            bar1.LinksPersistInfo.AddRange(new DevExpress.XtraBars.LinkPersistInfo[] { new DevExpress.XtraBars.LinkPersistInfo(barButtonItemSave), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemCalibrate, true), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemMarks), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemGrid, true), new DevExpress.XtraBars.LinkPersistInfo(barListItemBrushes, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemShare, true) });
             bar1.Text = "Tools";
             // 
             // barButtonItemSave
@@ -144,6 +145,13 @@ namespace ScreenMap
             barCheckItemGrid.Name = "barCheckItemGrid";
             barCheckItemGrid.Checked = true;
             barCheckItemGrid.CheckedChanged += barCheckItemGrid_CheckedChanged;
+            //
+            // barButtonItemShare
+            //
+            barButtonItemShare.Caption = "Share";
+            barButtonItemShare.Id = 8;
+            barButtonItemShare.Name = "barButtonItemShare";
+            barButtonItemShare.ItemClick += barButtonItemShare_ItemClick;
             //
             // barListItemBrushes
             // 
@@ -262,5 +270,6 @@ namespace ScreenMap
         private DevExpress.XtraBars.BarCheckItem barCheckItemMarks;
         private DevExpress.XtraBars.BarStaticItem barStaticItemHint;
         private DevExpress.XtraBars.BarCheckItem barCheckItemGrid;
+        private DevExpress.XtraBars.BarButtonItem barButtonItemShare;
     }
 }

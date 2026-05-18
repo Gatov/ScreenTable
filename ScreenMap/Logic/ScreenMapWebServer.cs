@@ -10,6 +10,8 @@ namespace ScreenMap.Logic;
 
 public class ScreenMapWebServer : IDisposable
 {
+    public const int Port = 5001;
+
     private readonly HttpListener _listener;
     private readonly Func<Size, byte[]> _renderSnapshot;
     private CancellationTokenSource _cts;
@@ -43,7 +45,7 @@ public class ScreenMapWebServer : IDisposable
     {
         _renderSnapshot = renderSnapshot;
         _listener = new HttpListener();
-        _listener.Prefixes.Add("http://+:5001/");
+        _listener.Prefixes.Add($"http://+:{Port}/");
     }
 
     public void Start()
