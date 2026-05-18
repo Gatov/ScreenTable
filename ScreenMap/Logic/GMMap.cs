@@ -23,6 +23,7 @@ public class GmMap : IDisposable
     
     private float _scale;
     private RectangleF _lastSeenClientrect;
+    private int _nextMarkId;
     private const float MaxWidth = 4096;
     private const float MaxHeight = 3000;
     public event Action<MapMessage> OnMessage;
@@ -55,6 +56,7 @@ public class GmMap : IDisposable
             _mapInfo.History = new List<Operation>();
             ReplayHistory(old);
         }
+        _nextMarkId = _mapInfo.Marks.Count > 0 ? _mapInfo.Marks.Max(m => m.Id) : 0;
     }
 
     private void ReplayHistory(List<Operation> mapInfoHistory)
@@ -141,8 +143,7 @@ public class GmMap : IDisposable
     public void MarkAt(PointF unscaledPoint, float brushSize, int argbColor)
     {
         var rect = new RectangleF(unscaledPoint.X - brushSize / 2f, unscaledPoint.Y - brushSize / 2f, brushSize, brushSize);
-        var markId = _mapInfo.Marks.LastOrDefault()?.Id ?? 0;
-        markId++; // next number
+        var markId = ++_nextMarkId;
         _mapInfo.Marks.Add(new Mark{X = unscaledPoint.X, Y = unscaledPoint.Y,
             ArgbColor = argbColor, Radius = (int)brushSize, Id = markId});
         OnMessage?.Invoke(new MarkAtMessage(unscaledPoint, (int)brushSize, argbColor, markId));
