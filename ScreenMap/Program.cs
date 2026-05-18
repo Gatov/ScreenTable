@@ -1,4 +1,5 @@
-﻿using DevExpress.LookAndFeel;
+﻿using System;
+using DevExpress.LookAndFeel;
 using DevExpress.Skins;
 using DevExpress.UserSkins;
 using System.Windows.Forms;

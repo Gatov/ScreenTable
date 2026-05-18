@@ -30,10 +30,10 @@ public class ScreenMapWebServer : IDisposable
           </style>
         </head>
         <body>
-          <img id="map" src="/ScreenMapView/image.png" />
+          <img id="map" src="/image.png" />
           <script>
             const img = document.getElementById('map');
-            setInterval(() => { img.src = '/ScreenMapView/image.png?t=' + Date.now(); }, 1000);
+            setInterval(() => { img.src = '/image.png?t=' + Date.now(); }, 1000);
           </script>
         </body>
         </html>
@@ -43,7 +43,7 @@ public class ScreenMapWebServer : IDisposable
     {
         _renderSnapshot = renderSnapshot;
         _listener = new HttpListener();
-        _listener.Prefixes.Add("http://localhost/ScreenMapView/");
+        _listener.Prefixes.Add("http://+:5001/");
     }
 
     public void Start()

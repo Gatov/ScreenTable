@@ -43,7 +43,9 @@ namespace ScreenMap
             {
                 MessageBox.Show(
                     "Web server could not start (Access Denied).\n" +
-                    "Run as Administrator to enable http://localhost/ScreenMapView.",
+                    "Run this once as Administrator to register the URL ACL:\n" +
+                    "  netsh http add urlacl url=http://+:5001/ user=Everyone\n" +
+                    "After that, the app can run as a normal user.",
                     "ScreenMap Web Server", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
 
