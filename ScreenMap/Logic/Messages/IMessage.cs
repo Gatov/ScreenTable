@@ -2,12 +2,11 @@ using System.Drawing;
 
 namespace ScreenMap.Logic.Messages;
 
-public class IMessage
+public class MapMessage
 {
-    
 }
 
-public class RevealAtMessage : IMessage
+public class RevealAtMessage : MapMessage
 {
     public RevealAtMessage(PointF unscaledPoint, float brushSize, bool reveal)
     {
@@ -21,7 +20,7 @@ public class RevealAtMessage : IMessage
     public bool Reveal { get; set; }
 }
 
-public class MarkAtMessage : IMessage
+public class MarkAtMessage : MapMessage
 {
     public MarkAtMessage(PointF unscaledPoint, int radius, int color, int id)
     {
@@ -36,7 +35,7 @@ public class MarkAtMessage : IMessage
     public int ArgbColor { get; set; }
     public int Id { get; set; }
 }
-public class NewImageMessage : IMessage
+public class NewImageMessage : MapMessage
 {
     public string Name;
     public byte[] Data;
@@ -47,17 +46,17 @@ public class NewImageMessage : IMessage
         Data = data;
     }
 }
-public class CenterAtMessage : IMessage
+public class CenterAtMessage : MapMessage
 {
     public PointF Location { get; set; }
 }
 
-public class ZoomInMessage : IMessage
+public class ZoomInMessage : MapMessage
 {
     public int Ticks { get; set; }
 }
 
-public class GridDataMessage : IMessage
+public class GridDataMessage : MapMessage
 {
     public int OffsetX { get; }
     public int OffsetY { get; }
@@ -71,7 +70,7 @@ public class GridDataMessage : IMessage
     }
 }
 
-public class ClientRectangleMessage : IMessage
+public class ClientRectangleMessage : MapMessage
 {
     public RectangleF Rectangle { get; set; }
 }

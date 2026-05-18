@@ -25,7 +25,7 @@ public class GmMap : IDisposable
     private RectangleF _lastSeenClientrect;
     private const float MaxWidth = 4096;
     private const float MaxHeight = 3000;
-    public event Action<IMessage> OnMessage;
+    public event Action<MapMessage> OnMessage;
     public Size Size => _scaledImage?.Size??new Size(1024,1000);
 
     public MapInfo Info
@@ -206,7 +206,7 @@ public class GmMap : IDisposable
         File.WriteAllText(jsonFile, text);
     }
 
-    public void ProcessMessage(IMessage msg)
+    public void ProcessMessage(MapMessage msg)
     {
         switch (msg)
         {
