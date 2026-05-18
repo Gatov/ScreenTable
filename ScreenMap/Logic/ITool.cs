@@ -5,7 +5,7 @@ using DevExpress.Utils.Drawing;
 
 namespace ScreenMap.Logic;
 
-public interface ITool
+public interface ITool : IDisposable
 {
     void OnMouseDown(PointF unscaledPos, MouseButtons buttons, Keys modifiers);
     void OnMouseUp(PointF unscaledPos, MouseButtons buttons, Keys modifiers);

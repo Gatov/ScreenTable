@@ -6,9 +6,11 @@ namespace ScreenMap.Logic;
 
 public static class FogUtil
 {
-    public static TextureBrush CreateSemitransparentBrushFromImage(Image original, float transparency)
+    // The returned TextureBrush keeps a live reference to `texture`; the caller
+    // owns both and must dispose them together.
+    public static TextureBrush CreateSemitransparentBrushFromImage(Image original, float transparency, out Bitmap texture)
     {
-        using var texture = new Bitmap(original.Width, original.Height, PixelFormat.Format32bppArgb);
+        texture = new Bitmap(original.Width, original.Height, PixelFormat.Format32bppArgb);
         var colorMatrix = new ColorMatrix { Matrix33 = transparency };
         using var imageAttributes = new ImageAttributes();
         imageAttributes.SetColorMatrix(colorMatrix, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);

@@ -12,7 +12,24 @@ public class PlayerController
     private PlayersMapView _mapView;
     PlayersMap _playersMap;
 
+    private readonly object _snapshotLock = new();
+    private byte[] _cachedSnapshot;
+    private Size _cachedSize;
+    private volatile bool _snapshotDirty = true;
+
     public Action<MapMessage> OnMessage;
+
+    // Returns a cached PNG if the map state is unchanged since the last render.
+    // Safe to call from any thread; lets the web server skip the UI-thread round-trip.
+    public byte[] TryGetCachedSnapshotPng(Size size)
+    {
+        lock (_snapshotLock)
+        {
+            if (!_snapshotDirty && _cachedSnapshot != null && _cachedSize == size)
+                return _cachedSnapshot;
+        }
+        return null;
+    }
 
     public byte[] RenderSnapshotPng(Size size)
     {
@@ -20,17 +37,33 @@ public class PlayerController
         if (bitmap == null) return null;
         using var ms = new MemoryStream();
         bitmap.Save(ms, ImageFormat.Png);
-        return ms.ToArray();
+        var bytes = ms.ToArray();
+        lock (_snapshotLock)
+        {
+            _cachedSnapshot = bytes;
+            _cachedSize = size;
+            _snapshotDirty = false;
+        }
+        return bytes;
     }
     public PlayerController()
     {
     }
     public void SetView(PlayersMapView mapView)
     {
+        if (_playersMap != null)
+        {
+            _playersMap.OnMessage -= Publish;
+            _playersMap.OnRectUpdated -= OnMapDirty;
+            _playersMap.Dispose();
+        }
         _mapView = mapView;
         _playersMap = new PlayersMap();
         _playersMap.OnMessage += Publish;
+        _playersMap.OnRectUpdated += OnMapDirty;
     }
+
+    private void OnMapDirty(RectangleF _) => _snapshotDirty = true;
     private void Publish(MapMessage obj)
     {
         OnMessage?.Invoke(obj);

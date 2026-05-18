@@ -124,6 +124,11 @@ public class ToolCalibrate : ITool, IKeyTool
 
     }
     public string Hint => "Use MLB to select grid area then Wheel to adjust cell size. Shift-Wheel to fine tune.";
+
+    public void Dispose()
+    {
+    }
+
     public void OnKeyDown(KeyEventArgs e)
     {
         switch (e.KeyCode)
