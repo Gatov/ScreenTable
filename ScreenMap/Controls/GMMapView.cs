@@ -171,18 +171,29 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     }
     private void InitializeTools()
     {
+        DetachTool(_toolCalibrate);
+        DetachTool(_defaultTool);
+        DetachTool(_markingTool);
+        _currentTool = null;
 
         _toolCalibrate = new ToolCalibrate(_map);
         _toolCalibrate.RequiresRepaint += CurrentToolOnRequiresRepaint;
         _defaultTool = new DefaultTool(_map, this);
         _defaultTool.SetBrushSize(_brushSize);
         _defaultTool.RequiresRepaint+= CurrentToolOnRequiresRepaint;
-        
+
         _markingTool = new MarkingTool(_map, this);
         _markingTool.SetBrushSize(_brushSize);
         _markingTool.RequiresRepaint+= CurrentToolOnRequiresRepaint;
-        
+
         SetTool(_defaultTool);
+    }
+
+    private void DetachTool(ITool tool)
+    {
+        if (tool == null) return;
+        tool.RequiresRepaint -= CurrentToolOnRequiresRepaint;
+        tool.Dispose();
     }
     private void CurrentToolOnRequiresRepaint(RectangleF obj)
     {

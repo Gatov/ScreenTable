@@ -28,9 +28,13 @@ namespace ScreenMap
             xtraScrollableControl1.AlwaysScrollActiveControlIntoView = false;
 
             _webServer = new ScreenMapWebServer(size =>
-                InvokeRequired
+            {
+                var cached = controller.TryGetCachedSnapshotPng(size);
+                if (cached != null) return cached;
+                return InvokeRequired
                     ? (byte[])Invoke(() => controller.RenderSnapshotPng(size))
-                    : controller.RenderSnapshotPng(size));
+                    : controller.RenderSnapshotPng(size);
+            });
             try
             {
                 _webServer.Start();

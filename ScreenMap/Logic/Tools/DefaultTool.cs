@@ -23,7 +23,14 @@ public class DefaultTool : ITool
         _gmMap = gmMap;
         _mapInfo = gmMap.Info;
         _view = view;
-        _gmMap.OnRectUpdated += rc =>RequiresRepaint?.Invoke(rc);
+        _gmMap.OnRectUpdated += OnGmRectUpdated;
+    }
+
+    private void OnGmRectUpdated(RectangleF rc) => RequiresRepaint?.Invoke(rc);
+
+    public virtual void Dispose()
+    {
+        _gmMap.OnRectUpdated -= OnGmRectUpdated;
     }
     public virtual void OnMouseDown(PointF unscaledPos, MouseButtons buttons, Keys modifiers)
     {

@@ -22,16 +22,15 @@ public partial class PlayersMapView : UserControl
     
     public void SetMap(PlayersMap map)
     {
+        if (_map != null)
+            _map.OnRectUpdated -= SafeUpdate;
         _map = map;
         var form = FindForm();
         if (form != null)
             form.Text = $"Players:{map.Name}";
-        
-        _map.OnRectUpdated += rc =>
-        {
-            SafeUpdate(rc);
-        };
-        
+
+        _map.OnRectUpdated += SafeUpdate;
+
         DoubleBuffered = true;
     }
 

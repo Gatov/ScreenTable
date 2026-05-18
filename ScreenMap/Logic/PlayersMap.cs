@@ -11,7 +11,9 @@ public class PlayersMap : IDisposable
     private Bitmap _playersImage;
     private Image _originalMap;
     private TextureBrush _revealBrush;
+    private Bitmap _revealTexture;
     private TextureBrush _semiRevealBrush;
+    private Bitmap _semiRevealTexture;
     public event Action<RectangleF> OnRectUpdated;
     public event Action<MapMessage> OnMessage;
     private MapInfo _mapInfo = new MapInfo();
@@ -32,7 +34,9 @@ public class PlayersMap : IDisposable
     {
         _playersImage?.Dispose();
         _revealBrush?.Dispose();
+        _revealTexture?.Dispose();
         _semiRevealBrush?.Dispose();
+        _semiRevealTexture?.Dispose();
         _hideBrush?.Dispose();
         _originalMap?.Dispose();
 
@@ -176,8 +180,8 @@ public class PlayersMap : IDisposable
 
     private void InitializeBrushes(Image newMap)
     {
-        _revealBrush = FogUtil.CreateSemitransparentBrushFromImage(newMap, 0.8f);
-        _semiRevealBrush = FogUtil.CreateSemitransparentBrushFromImage(newMap, 0.2f);
+        _revealBrush = FogUtil.CreateSemitransparentBrushFromImage(newMap, 0.8f, out _revealTexture);
+        _semiRevealBrush = FogUtil.CreateSemitransparentBrushFromImage(newMap, 0.2f, out _semiRevealTexture);
         _hideBrush = new SolidBrush( _fogOfWar);
     }
 
@@ -185,7 +189,9 @@ public class PlayersMap : IDisposable
     {
         _playersImage?.Dispose();
         _revealBrush?.Dispose();
+        _revealTexture?.Dispose();
         _semiRevealBrush?.Dispose();
+        _semiRevealTexture?.Dispose();
         _hideBrush?.Dispose();
         _originalMap?.Dispose();
     }
