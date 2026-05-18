@@ -38,6 +38,9 @@ public class PlayerController
             case  GridDataMessage gridData:
                 _playersMap.UpdateGrid(gridData);
                 break;
+            case GridVisibilityMessage gridVis:
+                _playersMap.SetGridVisible(gridVis.ShowGrid);
+                break;
             case  ZoomInMessage zoomMessage:
                 _playersMap.UpdateZoom(zoomMessage);
                 break;
