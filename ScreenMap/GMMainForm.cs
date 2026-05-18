@@ -1,4 +1,7 @@
-﻿using ScreenMap.Logic;
+﻿using System.Drawing;
+using System.Net;
+using System.Windows.Forms;
+using ScreenMap.Logic;
 using ScreenMap.Logic.Tools;
 using ScreenTable.Tools;
 
@@ -8,6 +11,7 @@ namespace ScreenMap
     {
         enum Mode { Normal, Calibrate, Mark };
         Mode _currentMode;
+        private ScreenMapWebServer _webServer;
 
         public GMMainForm()
         {
@@ -22,6 +26,24 @@ namespace ScreenMap
             gmMapView1.ToolChange += GmMapViewOnToolChange;
             //controller.OnMessage += gmMapView1.
             xtraScrollableControl1.AlwaysScrollActiveControlIntoView = false;
+
+            _webServer = new ScreenMapWebServer(size =>
+                InvokeRequired
+                    ? (Bitmap)Invoke(() => controller.RenderSnapshot(size))
+                    : controller.RenderSnapshot(size));
+            try
+            {
+                _webServer.Start();
+            }
+            catch (HttpListenerException ex) when (ex.ErrorCode == 5)
+            {
+                MessageBox.Show(
+                    "Web server could not start (Access Denied).\n" +
+                    "Run as Administrator to enable http://localhost/ScreenMapView.",
+                    "ScreenMap Web Server", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+
+            FormClosed += (_, _) => _webServer.Dispose();
         }
 
         private void GmMapViewOnToolChange(ITool obj)
