@@ -64,6 +64,11 @@ namespace ScreenMap
             barListItemBrushes.Caption = str;
         }
 
+        private void barCheckItemGrid_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        {
+            gmMapView1.SetGridVisible(barCheckItemGrid.Checked);
+        }
+
         private void barCheckItemMarks_CheckedChanged(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
         {
             if (_currentMode == Mode.Normal)

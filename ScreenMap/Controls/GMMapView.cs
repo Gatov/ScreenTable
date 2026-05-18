@@ -238,6 +238,12 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         _markingTool?.SetBrushSize(brushSizeInCells);
     }
 
+    public void SetGridVisible(bool show)
+    {
+        _map.SetGridVisible(show);
+        Invalidate();
+    }
+
     public void MarkingMode(bool mark)
     {
         if (mark)

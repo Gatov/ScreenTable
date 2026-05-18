@@ -75,3 +75,13 @@ public class ClientRectangleMessage : MapMessage
     public RectangleF Rectangle { get; set; }
 }
 
+public class GridVisibilityMessage : MapMessage
+{
+    public bool ShowGrid { get; }
+
+    public GridVisibilityMessage(bool showGrid)
+    {
+        ShowGrid = showGrid;
+    }
+}
+

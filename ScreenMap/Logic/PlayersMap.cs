@@ -24,7 +24,8 @@ public class PlayersMap : IDisposable
     private float _lastDpiY = 90;
     private SizeF _lastClientSize = new SizeF(100,100);
     private Color _fogOfWar = Color.Tan;
-    public string Name { get; private set; } 
+    private bool _showGrid = true;
+    public string Name { get; private set; }
 
 
     public void Initialize(Stream mapStream, string name)
@@ -109,18 +110,26 @@ public class PlayersMap : IDisposable
             using var pen = new Pen(Color.FromArgb(200, markColor), 1f/ZoomX);  
             g.DrawEllipse(pen, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
         }
-        using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / ZoomY)))
+        if (_showGrid && _mapInfo.CellSize > 0)
         {
-            for (float i = _mapInfo.OffsetX; i < rectInOriginal.X + rectInOriginal.Width; i += _mapInfo.CellSize)
-                g.DrawLine(pen, i, rectInOriginal.Y, i, rectInOriginal.Y + rectInOriginal.Height);
-        }
+            using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / ZoomY)))
+            {
+                for (float i = _mapInfo.OffsetX; i < rectInOriginal.X + rectInOriginal.Width; i += _mapInfo.CellSize)
+                    g.DrawLine(pen, i, rectInOriginal.Y, i, rectInOriginal.Y + rectInOriginal.Height);
+            }
 
-        using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / ZoomX)))
-        {
-            for (float i = _mapInfo.OffsetY; i < rectInOriginal.Y + rectInOriginal.Height; i += _mapInfo.CellSize)
-                g.DrawLine(pen, rectInOriginal.X, i, rectInOriginal.X + rectInOriginal.Width, i);
+            using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / ZoomX)))
+            {
+                for (float i = _mapInfo.OffsetY; i < rectInOriginal.Y + rectInOriginal.Height; i += _mapInfo.CellSize)
+                    g.DrawLine(pen, rectInOriginal.X, i, rectInOriginal.X + rectInOriginal.Width, i);
+            }
         }
-        
+    }
+
+    public void SetGridVisible(bool show)
+    {
+        _showGrid = show;
+        NotifyUpdate();
     }
 
     private RectangleF GetViewAreaInOriginal()

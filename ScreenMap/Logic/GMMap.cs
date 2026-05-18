@@ -24,6 +24,8 @@ public class GmMap : IDisposable
     private float _scale;
     private RectangleF _lastSeenClientrect;
     private int _nextMarkId;
+    private bool _showGrid = true;
+    private readonly Color _gridColor = Color.FromArgb(128, Color.Yellow);
     private const float MaxWidth = 4096;
     private const float MaxHeight = 3000;
     public event Action<MapMessage> OnMessage;
@@ -169,7 +171,7 @@ public class GmMap : IDisposable
         if (_scaledImage == null) return;
         var scaledRect = unscaledRect.Scale(_scale);
         g.DrawImage(_scaledImage, unscaledRect, scaledRect, GraphicsUnit.Pixel);
-        if(drawFog) 
+        if(drawFog)
             g.DrawImage(_scaledGmOverlay, unscaledRect, scaledRect, GraphicsUnit.Pixel);
         if (_lastSeenClientrect.IsEmpty == false)
         {
@@ -182,6 +184,24 @@ public class GmMap : IDisposable
             using var brush = new SolidBrush(Color.FromArgb(mark.ArgbColor));
             g.FillEllipse(brush, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
         }
+
+        if (_showGrid && _mapInfo != null && _mapInfo.CellSize > 0)
+        {
+            using var pen = new Pen(_gridColor, 1f);
+            float right = unscaledRect.X + unscaledRect.Width;
+            float bottom = unscaledRect.Y + unscaledRect.Height;
+            for (float x = _mapInfo.OffsetX; x < right; x += _mapInfo.CellSize)
+                g.Graphics.DrawLine(pen, x, unscaledRect.Y, x, bottom);
+            for (float y = _mapInfo.OffsetY; y < bottom; y += _mapInfo.CellSize)
+                g.Graphics.DrawLine(pen, unscaledRect.X, y, right, y);
+        }
+    }
+
+    public void SetGridVisible(bool show)
+    {
+        _showGrid = show;
+        OnMessage?.Invoke(new GridVisibilityMessage(show));
+        OnRectUpdated?.Invoke(RectangleF.Empty);
     }
 
     public void ZoomStep(int ticks)
@@ -191,7 +211,8 @@ public class GmMap : IDisposable
 
     public void UpdateInfo()
     {
-        OnMessage?.Invoke(new GridDataMessage(_mapInfo.OffsetX, _mapInfo.OffsetY, _mapInfo.CellSize));       
+        OnMessage?.Invoke(new GridDataMessage(_mapInfo.OffsetX, _mapInfo.OffsetY, _mapInfo.CellSize));
+        OnMessage?.Invoke(new GridVisibilityMessage(_showGrid));
     }
 
     public void CenterAt(PointF unscaledPos)
