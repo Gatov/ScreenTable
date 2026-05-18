@@ -13,7 +13,7 @@ public class PlayersMap : IDisposable
     private TextureBrush _revealBrush;
     private TextureBrush _semiRevealBrush;
     public event Action<RectangleF> OnRectUpdated;
-    public event Action<IMessage> OnMessage;
+    public event Action<MapMessage> OnMessage;
     private MapInfo _mapInfo = new MapInfo();
     private SolidBrush _hideBrush;
     private float _zoomFactor = 1; 

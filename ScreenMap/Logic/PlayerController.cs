@@ -10,7 +10,7 @@ public class PlayerController
     private PlayersMapView _mapView;
     PlayersMap _playersMap;
 
-    public Action<IMessage> OnMessage;
+    public Action<MapMessage> OnMessage;
     public PlayerController()
     {
     }
@@ -20,11 +20,11 @@ public class PlayerController
         _playersMap = new PlayersMap();
         _playersMap.OnMessage += Publish;
     }
-    private void Publish(IMessage obj)
+    private void Publish(MapMessage obj)
     {
         OnMessage?.Invoke(obj);
     }
-    public void ProcessMessage(IMessage message)
+    public void ProcessMessage(MapMessage message)
     {
         switch (message)
         {
