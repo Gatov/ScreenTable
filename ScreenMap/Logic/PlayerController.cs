@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.IO;
 using ScreenMap.Controls;
 using ScreenMap.Logic.Messages;
@@ -11,6 +12,8 @@ public class PlayerController
     PlayersMap _playersMap;
 
     public Action<MapMessage> OnMessage;
+
+    public Bitmap RenderSnapshot(Size size) => _playersMap?.RenderSnapshot(size);
     public PlayerController()
     {
     }

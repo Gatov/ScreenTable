@@ -91,13 +91,29 @@ public class PlayersMap : IDisposable
         _lastDpiX = g.DpiX;
         _lastDpiY = g.DpiY;
         _lastClientSize = clientSize;
-        //Rectangle clipRect = g.ClipBounds; 
-        
-        var rectInOriginal = GetViewAreaInOriginal(); 
-        g.ScaleTransform(ZoomX, ZoomY);
+        RenderToGraphics(g, _lastDpiX, _lastDpiY, clientSize);
+    }
+
+    private void RenderToGraphics(Graphics g, float dpiX, float dpiY, SizeF clientSize)
+    {
+        if (_playersImage == null) return;
+        if (_mapInfo.CellSize <= 0)
+        {
+            g.DrawImage(_playersImage, 0, 0);
+            return;
+        }
+
+        float zoomX = dpiX / _mapInfo.CellSize * _zoomFactor;
+        float zoomY = dpiY / _mapInfo.CellSize * _zoomFactor;
+        float viewWidth = clientSize.Width / zoomX;
+        float viewHeight = clientSize.Height / zoomY;
+        var rectInOriginal = new RectangleF(
+            _centerUnscaled.X - viewWidth / 2,
+            _centerUnscaled.Y - viewHeight / 2,
+            viewWidth, viewHeight);
+
+        g.ScaleTransform(zoomX, zoomY);
         g.TranslateTransform(-rectInOriginal.X, -rectInOriginal.Y);
-        
-        
         g.CompositingMode = CompositingMode.SourceOver;
         g.CompositingQuality = CompositingQuality.HighQuality;
         g.InterpolationMode = InterpolationMode.NearestNeighbor;
@@ -107,23 +123,32 @@ public class PlayersMap : IDisposable
             var markColor = Color.FromArgb(mark.ArgbColor);
             using var brush = new SolidBrush(markColor);
             g.FillEllipse(brush, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
-            using var pen = new Pen(Color.FromArgb(200, markColor), 1f/ZoomX);  
+            using var pen = new Pen(Color.FromArgb(200, markColor), 1f / zoomX);
             g.DrawEllipse(pen, new PointF(mark.X, mark.Y).RectByCenter(mark.Radius));
         }
         if (_showGrid && _mapInfo.CellSize > 0)
         {
-            using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / ZoomY)))
+            using (var pen = new Pen(_gridColor, Math.Min(1.5f, 3f / zoomY)))
             {
                 for (float i = _mapInfo.OffsetX; i < rectInOriginal.X + rectInOriginal.Width; i += _mapInfo.CellSize)
                     g.DrawLine(pen, i, rectInOriginal.Y, i, rectInOriginal.Y + rectInOriginal.Height);
             }
-
-            using (var pen = new Pen(_gridColor, Math.Min(1.5f,3f / ZoomX)))
+            using (var pen = new Pen(_gridColor, Math.Min(1.5f, 3f / zoomX)))
             {
                 for (float i = _mapInfo.OffsetY; i < rectInOriginal.Y + rectInOriginal.Height; i += _mapInfo.CellSize)
                     g.DrawLine(pen, rectInOriginal.X, i, rectInOriginal.X + rectInOriginal.Width, i);
             }
         }
+    }
+
+    public Bitmap RenderSnapshot(Size size)
+    {
+        if (_playersImage == null) return null;
+        var bitmap = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(bitmap);
+        g.Clear(Color.Black);
+        RenderToGraphics(g, 96f, 96f, size);
+        return bitmap;
     }
 
     public void SetGridVisible(bool show)
