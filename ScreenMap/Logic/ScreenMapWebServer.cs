@@ -1,6 +1,5 @@
 using System;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -12,7 +11,7 @@ namespace ScreenMap.Logic;
 public class ScreenMapWebServer : IDisposable
 {
     private readonly HttpListener _listener;
-    private readonly Func<Size, Bitmap> _renderSnapshot;
+    private readonly Func<Size, byte[]> _renderSnapshot;
     private CancellationTokenSource _cts;
     private Task _listenerTask;
 
@@ -40,7 +39,7 @@ public class ScreenMapWebServer : IDisposable
         </html>
         """;
 
-    public ScreenMapWebServer(Func<Size, Bitmap> renderSnapshot)
+    public ScreenMapWebServer(Func<Size, byte[]> renderSnapshot)
     {
         _renderSnapshot = renderSnapshot;
         _listener = new HttpListener();
@@ -81,8 +80,8 @@ public class ScreenMapWebServer : IDisposable
     {
         try
         {
-            using var bitmap = _renderSnapshot(SnapshotSize);
-            if (bitmap == null)
+            var png = _renderSnapshot(SnapshotSize);
+            if (png == null)
             {
                 context.Response.StatusCode = 503;
                 context.Response.Close();
@@ -90,11 +89,8 @@ public class ScreenMapWebServer : IDisposable
             }
             context.Response.ContentType = "image/png";
             context.Response.Headers["Cache-Control"] = "no-cache, no-store";
-            using var ms = new MemoryStream();
-            bitmap.Save(ms, ImageFormat.Png);
-            context.Response.ContentLength64 = ms.Length;
-            ms.Position = 0;
-            ms.CopyTo(context.Response.OutputStream);
+            context.Response.ContentLength64 = png.Length;
+            context.Response.OutputStream.Write(png, 0, png.Length);
         }
         catch { context.Response.StatusCode = 500; }
         finally { context.Response.Close(); }

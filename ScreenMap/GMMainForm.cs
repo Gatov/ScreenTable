@@ -29,8 +29,8 @@ namespace ScreenMap
 
             _webServer = new ScreenMapWebServer(size =>
                 InvokeRequired
-                    ? (Bitmap)Invoke(() => controller.RenderSnapshot(size))
-                    : controller.RenderSnapshot(size));
+                    ? (byte[])Invoke(() => controller.RenderSnapshotPng(size))
+                    : controller.RenderSnapshotPng(size));
             try
             {
                 _webServer.Start();

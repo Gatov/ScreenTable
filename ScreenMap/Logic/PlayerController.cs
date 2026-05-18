@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using ScreenMap.Controls;
 using ScreenMap.Logic.Messages;
@@ -13,7 +14,14 @@ public class PlayerController
 
     public Action<MapMessage> OnMessage;
 
-    public Bitmap RenderSnapshot(Size size) => _playersMap?.RenderSnapshot(size);
+    public byte[] RenderSnapshotPng(Size size)
+    {
+        using var bitmap = _playersMap?.RenderSnapshot(size);
+        if (bitmap == null) return null;
+        using var ms = new MemoryStream();
+        bitmap.Save(ms, ImageFormat.Png);
+        return ms.ToArray();
+    }
     public PlayerController()
     {
     }

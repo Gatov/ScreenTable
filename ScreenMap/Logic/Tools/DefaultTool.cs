@@ -121,7 +121,11 @@ public class DefaultTool : ITool
             }
         }
 
-        var rc = new RectangleF(prevLoc, new SizeF(_previousReveal));
+        var rc = RectangleF.FromLTRB(
+            Math.Min(prevLoc.X, _previousReveal.X),
+            Math.Min(prevLoc.Y, _previousReveal.Y),
+            Math.Max(prevLoc.X, _previousReveal.X),
+            Math.Max(prevLoc.Y, _previousReveal.Y));
         rc.Inflate(BrushSize/2f+1,BrushSize/2f+1);
         Invalidate(rc);
     }

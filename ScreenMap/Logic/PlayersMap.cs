@@ -30,6 +30,12 @@ public class PlayersMap : IDisposable
 
     public void Initialize(Stream mapStream, string name)
     {
+        _playersImage?.Dispose();
+        _revealBrush?.Dispose();
+        _semiRevealBrush?.Dispose();
+        _hideBrush?.Dispose();
+        _originalMap?.Dispose();
+
         _originalMap = Image.FromStream(mapStream);
         InitializePlayerImage(_originalMap);
         InitializeBrushes(_originalMap);
@@ -178,6 +184,10 @@ public class PlayersMap : IDisposable
     public void Dispose()
     {
         _playersImage?.Dispose();
+        _revealBrush?.Dispose();
+        _semiRevealBrush?.Dispose();
+        _hideBrush?.Dispose();
+        _originalMap?.Dispose();
     }
 
     public void CenterAt(PointF centerAtLocation)
@@ -196,7 +206,7 @@ public class PlayersMap : IDisposable
     {
         _mapInfo.CellSize = gridData.CellSize;
         _mapInfo.OffsetX = gridData.OffsetX;
-        _mapInfo.OffsetY = _mapInfo.OffsetY;
+        _mapInfo.OffsetY = gridData.OffsetY;
         NotifyUpdate();
     }
 

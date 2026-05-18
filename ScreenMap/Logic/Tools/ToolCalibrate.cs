@@ -128,10 +128,10 @@ public class ToolCalibrate : ITool, IKeyTool
     {
         switch (e.KeyCode)
         {
-            case Keys.Add: _calibrationCurrent.X = (int)_calibrationCurrent.X - 1; e.Handled = true; break;
+            case Keys.Left: _calibrationCurrent.X = (int)_calibrationCurrent.X - 1; e.Handled = true; break;
             case Keys.Right: _calibrationCurrent.X = (int)_calibrationCurrent.X + 1; e.Handled = true; break;
-            case Keys.Up: _calibrationCurrent.X = (int)_calibrationCurrent.Y - 1; e.Handled = true; break;
-            case Keys.Down: _calibrationCurrent.X = (int)_calibrationCurrent.Y + 1; e.Handled = true; break;
+            case Keys.Up: _calibrationCurrent.Y = (int)_calibrationCurrent.Y - 1; e.Handled = true; break;
+            case Keys.Down: _calibrationCurrent.Y = (int)_calibrationCurrent.Y + 1; e.Handled = true; break;
         }
         if(e.Handled)
             RequiresRepaint?.Invoke(RectangleF.Empty); // full repaint
