@@ -45,6 +45,12 @@ public class GmMap : IDisposable
         var newMap = Image.FromFile(_mapInfo.FileName);
         var data = File.ReadAllBytes(_mapInfo.FileName);
         OnMessage?.Invoke(new NewImageMessage(Path.GetFileNameWithoutExtension(_mapInfo.FileName), data));
+
+        if (!ReferenceEquals(_scaledImage, _originalImage))
+            _scaledImage?.Dispose();
+        _originalImage?.Dispose();
+        _scaledGmOverlay?.Dispose();
+
         _originalImage = newMap;
         //_scale = Math.Min(1,Math.Min(MaxWidth / newMap.Width, MaxHeight / newMap.Height));
         _scale = 1;
@@ -113,8 +119,9 @@ public class GmMap : IDisposable
 
     public void Dispose()
     {
+        if (!ReferenceEquals(_scaledImage, _originalImage))
+            _scaledImage?.Dispose();
         _originalImage?.Dispose();
-        _scaledImage?.Dispose();
         _scaledGmOverlay?.Dispose();
     }
 
