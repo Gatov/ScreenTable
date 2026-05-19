@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using ScreenMap.Controls;
+using ScreenMap.Logic.Camera;
 using ScreenMap.Logic.Messages;
 
 namespace ScreenMap.Logic;
@@ -19,6 +20,17 @@ public class PlayerController
 
     public Action<MapMessage> OnMessage;
 
+    private DetectionStore _detectionStore;
+    private Func<bool> _showDetections;
+    public void SetDetectionOverlay(DetectionStore store, Func<bool> showFlag)
+    {
+        _detectionStore = store;
+        _showDetections = showFlag;
+        _playersMap?.SetDetectionOverlay(store, showFlag);
+    }
+
+    public void InvalidateSnapshot() => _snapshotDirty = true;
+
     // Returns a cached PNG if the map state is unchanged since the last render.
     // Safe to call from any thread; lets the web server skip the UI-thread round-trip.
     public byte[] TryGetCachedSnapshotPng(Size size)
@@ -30,6 +42,20 @@ public class PlayerController
         }
         return null;
     }
+
+    /// <summary>Render a snapshot bitmap for off-screen consumers (e.g. camera detection).
+    /// Caller owns and must dispose the returned bitmap. Returns null if no map is loaded.</summary>
+    public Bitmap RenderSnapshotBitmap(Size size)
+    {
+        return _playersMap?.RenderSnapshot(size);
+    }
+
+    public RectangleF GetSnapshotViewRect(Size size)
+    {
+        return _playersMap?.GetSnapshotViewRect(size) ?? RectangleF.Empty;
+    }
+
+    public PlayersMap PlayersMap => _playersMap;
 
     public byte[] RenderSnapshotPng(Size size)
     {
@@ -61,6 +87,8 @@ public class PlayerController
         _playersMap = new PlayersMap();
         _playersMap.OnMessage += Publish;
         _playersMap.OnRectUpdated += OnMapDirty;
+        if (_detectionStore != null)
+            _playersMap.SetDetectionOverlay(_detectionStore, _showDetections);
     }
 
     private void OnMapDirty(RectangleF _) => _snapshotDirty = true;

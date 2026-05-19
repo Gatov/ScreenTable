@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
+using ScreenMap.Logic.Camera;
 using ScreenMap.Logic.Messages;
 namespace ScreenMap.Logic;
 
@@ -27,7 +28,16 @@ public class PlayersMap : IDisposable
     private SizeF _lastClientSize = new SizeF(100,100);
     private Color _fogOfWar = Color.Tan;
     private bool _showGrid = true;
+    private const int FiducialSizePx = 80;
+    private DetectionStore _detectionStore;
+    private Func<bool> _showDetections;
     public string Name { get; private set; }
+
+    public void SetDetectionOverlay(DetectionStore store, Func<bool> showFlag)
+    {
+        _detectionStore = store;
+        _showDetections = showFlag;
+    }
 
 
     public void Initialize(Stream mapStream, string name)
@@ -110,6 +120,7 @@ public class PlayersMap : IDisposable
         if (_mapInfo.CellSize <= 0)
         {
             g.DrawImage(_playersImage, 0, 0);
+            DrawCornerFiducials(g, clientSize);
             return;
         }
 
@@ -149,6 +160,54 @@ public class PlayersMap : IDisposable
                     g.DrawLine(pen, rectInOriginal.X, i, rectInOriginal.X + rectInOriginal.Width, i);
             }
         }
+        DrawDetectionOverlay(g, zoomX);
+        g.ResetTransform();
+        DrawCornerFiducials(g, clientSize);
+    }
+
+    private void DrawDetectionOverlay(Graphics g, float zoomX)
+    {
+        if (_detectionStore == null || _showDetections == null || !_showDetections()) return;
+        var dets = _detectionStore.Snapshot();
+        if (dets.Length == 0) return;
+        var prev = g.CompositingMode;
+        g.CompositingMode = CompositingMode.SourceOver;
+        using var fill = new SolidBrush(Color.FromArgb(80, Color.LimeGreen));
+        using var pen = new Pen(Color.FromArgb(220, Color.LimeGreen), Math.Max(1f / zoomX, 0.5f));
+        foreach (var d in dets)
+        {
+            var r = new RectangleF(d.Center.X - d.Radius, d.Center.Y - d.Radius, d.Radius * 2, d.Radius * 2);
+            g.FillEllipse(fill, r);
+            g.DrawEllipse(pen, r);
+        }
+        g.CompositingMode = prev;
+    }
+
+    private static void DrawCornerFiducials(Graphics g, SizeF clientSize)
+    {
+        int w = (int)clientSize.Width;
+        int h = (int)clientSize.Height;
+        if (w < FiducialSizePx * 2 || h < FiducialSizePx * 2) return;
+        var markers = ArucoMarkers.GetMarkers(FiducialSizePx);
+        var prevInterp = g.InterpolationMode;
+        var prevComp = g.CompositingMode;
+        g.InterpolationMode = InterpolationMode.NearestNeighbor;
+        g.CompositingMode = CompositingMode.SourceCopy;
+        // White quiet zone keeps ArUco detection reliable even on dark/textured map content.
+        using (var white = new SolidBrush(Color.White))
+        {
+            int q = FiducialSizePx + 8;
+            g.FillRectangle(white, 0, 0, q, q);
+            g.FillRectangle(white, w - q, 0, q, q);
+            g.FillRectangle(white, w - q, h - q, q, q);
+            g.FillRectangle(white, 0, h - q, q, q);
+        }
+        g.DrawImage(markers[0], 4, 4, FiducialSizePx, FiducialSizePx);
+        g.DrawImage(markers[1], w - FiducialSizePx - 4, 4, FiducialSizePx, FiducialSizePx);
+        g.DrawImage(markers[2], w - FiducialSizePx - 4, h - FiducialSizePx - 4, FiducialSizePx, FiducialSizePx);
+        g.DrawImage(markers[3], 4, h - FiducialSizePx - 4, FiducialSizePx, FiducialSizePx);
+        g.InterpolationMode = prevInterp;
+        g.CompositingMode = prevComp;
     }
 
     public Bitmap RenderSnapshot(Size size)
@@ -159,6 +218,24 @@ public class PlayersMap : IDisposable
         g.Clear(Color.Black);
         RenderToGraphics(g, 96f, 96f, size);
         return bitmap;
+    }
+
+    /// <summary>
+    /// Returns the rectangle (in unscaled map coordinates) that would be rendered
+    /// when calling RenderSnapshot at the given size. Returns Empty if no map is loaded
+    /// or CellSize is invalid.
+    /// </summary>
+    public RectangleF GetSnapshotViewRect(Size size)
+    {
+        if (_playersImage == null || _mapInfo.CellSize <= 0) return RectangleF.Empty;
+        float zoomX = 96f / _mapInfo.CellSize * _zoomFactor;
+        float zoomY = 96f / _mapInfo.CellSize * _zoomFactor;
+        float viewWidth = size.Width / zoomX;
+        float viewHeight = size.Height / zoomY;
+        return new RectangleF(
+            _centerUnscaled.X - viewWidth / 2,
+            _centerUnscaled.Y - viewHeight / 2,
+            viewWidth, viewHeight);
     }
 
     public void SetGridVisible(bool show)

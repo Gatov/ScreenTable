@@ -3,7 +3,9 @@ using System.Drawing;
 using System.Net;
 using System.Threading;
 using System.Windows.Forms;
+using ScreenMap.Forms;
 using ScreenMap.Logic;
+using ScreenMap.Logic.Camera;
 using ScreenMap.Logic.Tools;
 using ScreenTable.Tools;
 
@@ -15,12 +17,18 @@ namespace ScreenMap
         Mode _currentMode;
         private ScreenMapWebServer _webServer;
         private CloudflareTunnel _tunnel;
+        private CameraSettings _cameraSettings;
+        private DetectionStore _detectionStore;
+        private DetectionService _detectionService;
+        private PlayerController _controller;
+        private static readonly Size CameraSnapshotSize = new Size(960, 540);
 
         public GMMainForm()
         {
             InitializeComponent();
             // Add scrollbars tho the form so user can scroll to see all controls
             PlayerController controller = new PlayerController();
+            _controller = controller;
             var playerView = new PlayersForm(controller);
 
             playerView.Show();
@@ -29,6 +37,11 @@ namespace ScreenMap
             gmMapView1.ToolChange += GmMapViewOnToolChange;
             //controller.OnMessage += gmMapView1.
             xtraScrollableControl1.AlwaysScrollActiveControlIntoView = false;
+
+            _cameraSettings = CameraSettings.Load();
+            _detectionStore = new DetectionStore();
+            controller.SetDetectionOverlay(_detectionStore, () => _cameraSettings.ShowOnPlayerView);
+            gmMapView1.SetDetectionOverlay(_detectionStore, () => _cameraSettings.ShowOnGmView);
 
             _webServer = new ScreenMapWebServer(size =>
             {
@@ -54,9 +67,62 @@ namespace ScreenMap
 
             FormClosed += (_, _) =>
             {
+                _detectionService?.Dispose();
                 _webServer.Dispose();
                 _tunnel?.Dispose();
             };
+
+            InitializeDetectionService();
+        }
+
+        private void InitializeDetectionService()
+        {
+            _detectionService?.Dispose();
+            _detectionService = new DetectionService(
+                _detectionStore,
+                size => SafeInvoke(() => _controller.RenderSnapshotBitmap(size)),
+                size => SafeInvoke(() => _controller.GetSnapshotViewRect(size)),
+                CameraSnapshotSize);
+            _detectionService.DetectionsUpdated += OnDetectionsUpdated;
+            _detectionService.Apply(_cameraSettings);
+            UpdateCameraStatus();
+        }
+
+        private T SafeInvoke<T>(Func<T> fn)
+        {
+            if (IsDisposed || !IsHandleCreated) return default;
+            try { return (T)Invoke(fn); }
+            catch (ObjectDisposedException) { return default; }
+            catch (InvalidOperationException) { return default; }
+        }
+
+        private void OnDetectionsUpdated()
+        {
+            if (IsDisposed) return;
+            if (InvokeRequired) { BeginInvoke(new Action(OnDetectionsUpdated)); return; }
+            _controller.InvalidateSnapshot();
+            gmMapView1.InvalidateOverlay();
+            UpdateCameraStatus();
+        }
+
+        private void UpdateCameraStatus()
+        {
+            var s = _detectionStore.Status;
+            var text = _detectionStore.StatusText;
+            barStaticItemCameraStatus.Caption = $"Camera: {text}";
+        }
+
+        private void barButtonItemCamera_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        {
+            using var dlg = new CameraSettingsForm(_cameraSettings);
+            if (dlg.ShowDialog(this) == DialogResult.OK)
+            {
+                _cameraSettings = dlg.Result;
+                _detectionService.Apply(_cameraSettings);
+                UpdateCameraStatus();
+                gmMapView1.InvalidateOverlay();
+                _controller.InvalidateSnapshot();
+            }
         }
 
         private void GmMapViewOnToolChange(ITool obj)

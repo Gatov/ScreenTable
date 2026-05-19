@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using DevExpress.Utils;
 using DevExpress.Utils.Extensions;
 using ScreenMap.Logic;
+using ScreenMap.Logic.Camera;
 using ScreenMap.Logic.Tools;
 using ScreenTable.Tools;
 // ReSharper disable LocalizableElement
@@ -25,7 +26,15 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     private MarkingTool _markingTool;
 
     private ITool _currentTool = null;
-    public event Action<ITool> ToolChange; 
+    public event Action<ITool> ToolChange;
+
+    private DetectionStore _detectionStore;
+    private Func<bool> _showDetections;
+    public void SetDetectionOverlay(DetectionStore store, Func<bool> showFlag)
+    {
+        _detectionStore = store;
+        _showDetections = showFlag;
+    }
     
     public float ZoomLevel
     {
@@ -131,6 +140,7 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
         System.Diagnostics.Debug.WriteLine($"GMControl.Paint: {sw.Elapsed} - {unscaledRect}");
         if (_currentTool != null)
             _currentTool.OnPaint(g.Graphics, TranslateToUnscaledPoint(PointToClient(MousePosition)));
+        DrawDetectionOverlay(g.Graphics);
     }
     private void OnDragDrop(object sender, DragEventArgs e)
     {
@@ -188,6 +198,26 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
 
         SetTool(_defaultTool);
     }
+
+    private void DrawDetectionOverlay(Graphics g)
+    {
+        if (_detectionStore == null || _showDetections == null || !_showDetections()) return;
+        var dets = _detectionStore.Snapshot();
+        if (dets.Length == 0) return;
+        var prev = g.CompositingMode;
+        g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
+        using var fill = new SolidBrush(Color.FromArgb(80, Color.LimeGreen));
+        using var pen = new Pen(Color.FromArgb(220, Color.LimeGreen), 1f);
+        foreach (var d in dets)
+        {
+            var r = new RectangleF(d.Center.X - d.Radius, d.Center.Y - d.Radius, d.Radius * 2, d.Radius * 2);
+            g.FillEllipse(fill, r);
+            g.DrawEllipse(pen, r);
+        }
+        g.CompositingMode = prev;
+    }
+
+    public void InvalidateOverlay() => Invalidate();
 
     private void DetachTool(ITool tool)
     {
