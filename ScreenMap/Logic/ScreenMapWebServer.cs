@@ -114,5 +114,6 @@ public class ScreenMapWebServer : IDisposable
     {
         _cts?.Cancel();
         try { _listener.Close(); } catch { }
+        _cts?.Dispose();
     }
 }

@@ -7,7 +7,7 @@ using ScreenMap.Logic.Messages;
 
 namespace ScreenMap.Logic;
 
-public class PlayerController
+public class PlayerController : IDisposable
 {
     private PlayersMapView _mapView;
     PlayersMap _playersMap;
@@ -61,6 +61,17 @@ public class PlayerController
         _playersMap = new PlayersMap();
         _playersMap.OnMessage += Publish;
         _playersMap.OnRectUpdated += OnMapDirty;
+    }
+
+    public void Dispose()
+    {
+        if (_playersMap != null)
+        {
+            _playersMap.OnMessage -= Publish;
+            _playersMap.OnRectUpdated -= OnMapDirty;
+            _playersMap.Dispose();
+            _playersMap = null;
+        }
     }
 
     private void OnMapDirty(RectangleF _) => _snapshotDirty = true;

@@ -15,12 +15,14 @@ namespace ScreenMap
         Mode _currentMode;
         private ScreenMapWebServer _webServer;
         private CloudflareTunnel _tunnel;
+        private PlayerController _controller;
 
         public GMMainForm()
         {
             InitializeComponent();
             // Add scrollbars tho the form so user can scroll to see all controls
             PlayerController controller = new PlayerController();
+            _controller = controller;
             var playerView = new PlayersForm(controller);
 
             playerView.Show();
@@ -56,6 +58,7 @@ namespace ScreenMap
             {
                 _webServer.Dispose();
                 _tunnel?.Dispose();
+                _controller.Dispose();
             };
         }
 
