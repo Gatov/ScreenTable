@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="SampleFrames\ScreenMapCaptures\" />
+    <Folder Include="SampleFrames\WithObjects\" />
   </ItemGroup>
 
 </Project>

@@ -31,50 +31,24 @@ public sealed class FigurineDetector : IDisposable
     private Mat _morphed;
     private Mat _kernel;
 
-    public int MinBlobAreaPx { get; set; } = 80;
+    public int MinBlobAreaPx { get; set; } = 800;
 
     /// <summary>Grayscale diff above this counts as an object. Fixed (not Otsu) so map
-    /// texture stays below it while a physical object clears it.</summary>
-    public int DiffThreshold { get; set; } = 40;
+    /// texture / screen-photo appearance noise stays below it while an object clears it.</summary>
+    public int DiffThreshold { get; set; } = 60;
 
     public DetectStatus Detect(Mat cameraFrame, Bitmap playerView, out FigurineDetection[] detections)
     {
         detections = Array.Empty<FigurineDetection>();
         if (cameraFrame == null || cameraFrame.Empty() || playerView == null) return DetectStatus.Empty;
 
-        CvAruco.DetectMarkers(cameraFrame, _arucoDict, out var corners, out var ids, _params, out _);
-        if (ids == null || ids.Length < 4) return DetectStatus.NoMarkers;
-
-        // Map ID -> centroid in camera coords.
-        var centers = new Dictionary<int, Point2f>();
-        for (int i = 0; i < ids.Length; i++)
-        {
-            var c = corners[i];
-            if (c == null || c.Length < 4) continue;
-            float cx = 0, cy = 0;
-            for (int k = 0; k < 4; k++) { cx += c[k].X; cy += c[k].Y; }
-            centers[ids[i]] = new Point2f(cx / 4f, cy / 4f);
-        }
-        if (!centers.ContainsKey(0) || !centers.ContainsKey(1) ||
-            !centers.ContainsKey(2) || !centers.ContainsKey(3))
-            return DetectStatus.NoMarkers;
+        var src = DetectMarkerCenters(cameraFrame);
+        if (src == null) return DetectStatus.NoMarkers;
 
         int dstW = playerView.Width;
         int dstH = playerView.Height;
-        var src = new[] { centers[0], centers[1], centers[2], centers[3] };
-        var dst = new[]
-        {
-            new Point2f(0, 0),
-            new Point2f(dstW, 0),
-            new Point2f(dstW, dstH),
-            new Point2f(0, dstH)
-        };
 
-        using var h = Cv2.GetPerspectiveTransform(src, dst);
-        EnsureMat(ref _warped, dstH, dstW, MatType.CV_8UC3);
-        Cv2.WarpPerspective(cameraFrame, _warped, h, new OpenCvSharp.Size(dstW, dstH));
-
-        // Convert player-view Bitmap to Mat (BGR).
+        // Convert the player-view Bitmap to Mat (BGR) — this is the alignment reference.
         DisposeIfWrongSize(ref _playerMat, dstH, dstW, MatType.CV_8UC3);
         if (_playerMat == null)
             _playerMat = BitmapConverter.ToMat(playerView);
@@ -92,6 +66,19 @@ public sealed class FigurineDetector : IDisposable
             _playerMat = bgr.Clone();
         }
 
+        // Warp the camera frame so its fiducials land on the REFERENCE's fiducials. Mapping
+        // marker-centers -> the reference's own detected marker-centers (not the image
+        // corners) aligns the map content even though the filmed screen and the reference
+        // are rendered at different resolutions (fiducials sit at the same fraction).
+        var refCenters = DetectMarkerCenters(_playerMat);
+        if (refCenters == null) return DetectStatus.NoMarkers;
+
+        var srcPts = new[] { src[0], src[1], src[2], src[3] };
+        var dstPts = new[] { refCenters[0], refCenters[1], refCenters[2], refCenters[3] };
+        using var h = Cv2.GetPerspectiveTransform(srcPts, dstPts);
+        EnsureMat(ref _warped, dstH, dstW, MatType.CV_8UC3);
+        Cv2.WarpPerspective(cameraFrame, _warped, h, new OpenCvSharp.Size(dstW, dstH));
+
         EnsureMat(ref _warpedGray, dstH, dstW, MatType.CV_8UC1);
         EnsureMat(ref _playerGray, dstH, dstW, MatType.CV_8UC1);
         Cv2.CvtColor(_warped, _warpedGray, ColorConversionCodes.BGR2GRAY);
@@ -108,8 +95,11 @@ public sealed class FigurineDetector : IDisposable
         EnsureMat(ref _diff, dstH, dstW, MatType.CV_8UC1);
         Cv2.Absdiff(_warpedGray, _playerGray, _diff);
 
+        // Low-pass before diff: smooths out the high-frequency appearance differences
+        // between a digital map and a photo of it (bloom, screen texture, sub-pixel
+        // registration), while a solid object survives.
         EnsureMat(ref _blur, dstH, dstW, MatType.CV_8UC1);
-        Cv2.GaussianBlur(_diff, _blur, new OpenCvSharp.Size(5, 5), 0);
+        Cv2.GaussianBlur(_diff, _blur, new OpenCvSharp.Size(11, 11), 0);
 
         // Fixed threshold, NOT Otsu: a physical object causes a strong local diff, while
         // map texture / registration residual stays low after brightness normalization.
@@ -118,9 +108,14 @@ public sealed class FigurineDetector : IDisposable
         EnsureMat(ref _thresh, dstH, dstW, MatType.CV_8UC1);
         Cv2.Threshold(_blur, _thresh, DiffThreshold, 255, ThresholdTypes.Binary);
 
-        // Mask out the 4 corner regions where the ArUco fiducials live —
-        // those always differ between rendered view and warped camera frame.
-        MaskCorners(_thresh, dstW, dstH, 96);
+        // Restrict to the play area bounded by the four markers. Outside that quad the warp
+        // extrapolates over the screen bezel/border, which always differs wildly — those
+        // were the dominant false positives.
+        MaskOutsideQuad(_thresh, refCenters.Values);
+
+        // Mask out the fiducial regions (centered on the reference markers, wherever they
+        // are) — those always differ between the rendered view and the warped camera frame.
+        MaskAround(_thresh, refCenters.Values, 95);
 
         if (_kernel == null || _kernel.IsDisposed)
             _kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(5, 5));
@@ -142,6 +137,27 @@ public sealed class FigurineDetector : IDisposable
         return DetectStatus.Ok;
     }
 
+    /// <summary>Detects the four corner fiducials and returns id -> centroid, or null if
+    /// not all of 0..3 are present.</summary>
+    private Dictionary<int, Point2f> DetectMarkerCenters(Mat img)
+    {
+        CvAruco.DetectMarkers(img, _arucoDict, out var corners, out var ids, _params, out _);
+        if (ids == null || ids.Length < 4) return null;
+        var centers = new Dictionary<int, Point2f>();
+        for (int i = 0; i < ids.Length; i++)
+        {
+            var c = corners[i];
+            if (c == null || c.Length < 4) continue;
+            float cx = 0, cy = 0;
+            for (int k = 0; k < 4; k++) { cx += c[k].X; cy += c[k].Y; }
+            centers[ids[i]] = new Point2f(cx / 4f, cy / 4f);
+        }
+        if (!centers.ContainsKey(0) || !centers.ContainsKey(1) ||
+            !centers.ContainsKey(2) || !centers.ContainsKey(3))
+            return null;
+        return centers;
+    }
+
     private static void EnsureMat(ref Mat mat, int rows, int cols, MatType type)
     {
         if (mat != null && !mat.IsDisposed && mat.Rows == rows && mat.Cols == cols && mat.Type() == type)
@@ -160,13 +176,32 @@ public sealed class FigurineDetector : IDisposable
         }
     }
 
-    private static void MaskCorners(Mat mask, int w, int h, int cornerSize)
+    private static void MaskOutsideQuad(Mat mask, System.Collections.Generic.IEnumerable<Point2f> centers)
+    {
+        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+        foreach (var c in centers)
+        {
+            minX = Math.Min(minX, c.X); maxX = Math.Max(maxX, c.X);
+            minY = Math.Min(minY, c.Y); maxY = Math.Max(maxY, c.Y);
+        }
+        var keep = new Rect((int)minX, (int)minY, (int)(maxX - minX), (int)(maxY - minY))
+            .Intersect(new Rect(0, 0, mask.Cols, mask.Rows));
+        // Zero everything outside the marker bounding box.
+        if (keep.Top > 0) Cv2.Rectangle(mask, new Rect(0, 0, mask.Cols, keep.Top), Scalar.Black, -1);
+        if (keep.Bottom < mask.Rows) Cv2.Rectangle(mask, new Rect(0, keep.Bottom, mask.Cols, mask.Rows - keep.Bottom), Scalar.Black, -1);
+        if (keep.Left > 0) Cv2.Rectangle(mask, new Rect(0, 0, keep.Left, mask.Rows), Scalar.Black, -1);
+        if (keep.Right < mask.Cols) Cv2.Rectangle(mask, new Rect(keep.Right, 0, mask.Cols - keep.Right, mask.Rows), Scalar.Black, -1);
+    }
+
+    private static void MaskAround(Mat mask, System.Collections.Generic.IEnumerable<Point2f> centers, int half)
     {
         var black = new Scalar(0);
-        Cv2.Rectangle(mask, new Rect(0, 0, cornerSize, cornerSize), black, -1);
-        Cv2.Rectangle(mask, new Rect(w - cornerSize, 0, cornerSize, cornerSize), black, -1);
-        Cv2.Rectangle(mask, new Rect(w - cornerSize, h - cornerSize, cornerSize, cornerSize), black, -1);
-        Cv2.Rectangle(mask, new Rect(0, h - cornerSize, cornerSize, cornerSize), black, -1);
+        foreach (var c in centers)
+        {
+            int x = (int)c.X - half, y = (int)c.Y - half;
+            var rect = new Rect(x, y, half * 2, half * 2).Intersect(new Rect(0, 0, mask.Cols, mask.Rows));
+            if (rect.Width > 0 && rect.Height > 0) Cv2.Rectangle(mask, rect, black, -1);
+        }
     }
 
     public void Dispose()

@@ -21,9 +21,13 @@ namespace ScreenMap.Tests;
 public class FigurineDetectionTests
 {
     private const int Fid = 80;
+    private const int Quiet = 12;
+    private const int Ring = 8;
+    private const float InsetFrac = 0.12f;
 
-    /// <summary>A marked "screen": dark uniform background with the four corner fiducials
-    /// and their white quiet zones — same layout PlayersMap renders.</summary>
+    /// <summary>A marked "screen": dark uniform background with the four fiducials laid out
+    /// exactly like PlayersMap.DrawCornerFiducials — fractional-inset centers, black ring
+    /// around a white quiet zone — so markers sit at the same fraction at any resolution.</summary>
     private static Bitmap RenderScene(int w, int h)
     {
         var bmp = new Bitmap(w, h);
@@ -32,18 +36,22 @@ public class FigurineDetectionTests
         g.InterpolationMode = InterpolationMode.NearestNeighbor;
         g.CompositingMode = CompositingMode.SourceCopy;
         var markers = ArucoMarkers.GetMarkers(Fid);
-        using (var white = new SolidBrush(Color.White))
+        int white = Fid + 2 * Quiet;
+        int black = white + 2 * Ring;
+        int half = black / 2;
+        int fx = System.Math.Clamp((int)System.Math.Round(InsetFrac * w), half, w - half);
+        int fy = System.Math.Clamp((int)System.Math.Round(InsetFrac * h), half, h - half);
+
+        void DrawCentered(int cx, int cy, Bitmap m)
         {
-            int q = Fid + 8;
-            g.FillRectangle(white, 0, 0, q, q);
-            g.FillRectangle(white, w - q, 0, q, q);
-            g.FillRectangle(white, w - q, h - q, q, q);
-            g.FillRectangle(white, 0, h - q, q, q);
+            g.FillRectangle(Brushes.Black, cx - half, cy - half, black, black);
+            g.FillRectangle(Brushes.White, cx - half + Ring, cy - half + Ring, white, white);
+            g.DrawImage(m, cx - Fid / 2, cy - Fid / 2, Fid, Fid);
         }
-        g.DrawImage(markers[0], 4, 4, Fid, Fid);
-        g.DrawImage(markers[1], w - Fid - 4, 4, Fid, Fid);
-        g.DrawImage(markers[2], w - Fid - 4, h - Fid - 4, Fid, Fid);
-        g.DrawImage(markers[3], 4, h - Fid - 4, Fid, Fid);
+        DrawCentered(fx, fy, markers[0]);
+        DrawCentered(w - fx, fy, markers[1]);
+        DrawCentered(w - fx, h - fy, markers[2]);
+        DrawCentered(fx, h - fy, markers[3]);
         return bmp;
     }
 
@@ -58,7 +66,7 @@ public class FigurineDetectionTests
         using var cameraBgra = BitmapConverter.ToMat(RenderScene(1280, 720));
         using var camera = cameraBgra.CvtColor(ColorConversionCodes.BGRA2BGR);
         Cv2.Add(camera, new Scalar(40, 40, 40), camera); // camera is brighter than the reference
-        var objCenter = new OpenCvSharp.Point(220, 560);  // bottom-left region
+        var objCenter = new OpenCvSharp.Point(300, 360);  // left-center, clear of the corner fiducials
         Cv2.Circle(camera, objCenter, 26, new Scalar(0, 0, 0), -1); // a dark figurine vs the grey map
 
         using var detector = new FigurineDetector { MinBlobAreaPx = 200 };
@@ -68,7 +76,6 @@ public class FigurineDetectionTests
         Assert.That(dets.Length, Is.EqualTo(1), "exactly one object expected");
         var d = dets[0];
         Assert.That(d.Center.X, Is.LessThan(view.Width / 2f), "object on the left");
-        Assert.That(d.Center.Y, Is.GreaterThan(view.Height / 2f), "object on the bottom");
     }
 
     [Test]
@@ -101,31 +108,28 @@ public class FigurineDetectionTests
         }
     }
 
-    /// <summary>
-    /// Once a clean pair is captured (post overlay-split fix), drop it in
-    /// SampleFrames/ScreenMapCaptures and assert here: load frame + view, run Detect,
-    /// expect the real figurine. Kept as a hook for that next step.
-    /// </summary>
-    [Test]
-    [Explicit("Add a freshly captured frame/view pair to assert against.")]
-    public void RealPair_FromCaptures()
+    private static (Mat frame, Bitmap view) LoadCapture(string stamp)
     {
         string dir = System.IO.Path.Combine(TestContext.CurrentContext.TestDirectory,
             "SampleFrames", "ScreenMapCaptures");
-        var frames = System.IO.Directory.Exists(dir)
-            ? System.IO.Directory.GetFiles(dir, "frame-*.png")
-            : System.Array.Empty<string>();
-        Assert.That(frames, Is.Not.Empty, "no captured frames in " + dir);
-        foreach (var fp in frames)
+        var frame = Cv2.ImRead(System.IO.Path.Combine(dir, $"frame-{stamp}.png"), ImreadModes.Color);
+        var view = (Bitmap)Image.FromFile(System.IO.Path.Combine(dir, $"view-{stamp}.png"));
+        return (frame, view);
+    }
+
+    // Real captured pair (post fractional-fiducial fix), no figurine on the table.
+    // The whole map is bright, busy, filmed at an angle — a stress test for false positives.
+    [Test]
+    public void RealPair_171645_NoObject_NoFalsePositives()
+    {
+        var (frame, view) = LoadCapture("20260531-171645");
+        using (frame)
+        using (view)
+        using (var detector = new FigurineDetector())
         {
-            var stamp = System.IO.Path.GetFileNameWithoutExtension(fp).Substring("frame-".Length);
-            var vp = System.IO.Path.Combine(dir, $"view-{stamp}.png");
-            if (!System.IO.File.Exists(vp)) continue;
-            using var frame = Cv2.ImRead(fp, ImreadModes.Color);
-            using var view = (Bitmap)Image.FromFile(vp);
-            using var detector = new FigurineDetector();
             var status = detector.Detect(frame, view, out var dets);
-            TestContext.WriteLine($"{stamp}: status={status} detections={dets.Length}");
+            Assert.That(status, Is.EqualTo(DetectStatus.Ok));
+            Assert.That(dets.Length, Is.EqualTo(0), "no figurine on the table");
         }
     }
 }

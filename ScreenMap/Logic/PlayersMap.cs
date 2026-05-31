@@ -31,6 +31,11 @@ public class PlayersMap : IDisposable
     private const int FiducialSizePx = 80;
     private const int FiducialQuietPx = 12; // white quiet zone around the marker
     private const int FiducialRingPx = 8;   // black ring around the quiet zone
+    // Marker-center inset as a fraction of the view. Must be large enough that the black
+    // square stays on-screen at the detector reference size (960x540) without clamping —
+    // otherwise the fraction differs between the filmed screen and the reference and the
+    // map misaligns. 0.12*540 = 64.8 > half the black square (60).
+    private const float FiducialInsetFrac = 0.12f;
     private DetectionStore _detectionStore;
     public string Name { get; private set; }
 
@@ -114,27 +119,44 @@ public class PlayersMap : IDisposable
         // The player screen is what the detection camera films — it must NEVER show the
         // detection overlay, or the circles get filmed back in and pollute detection.
         // The overlay is added only off-screen for the web/GM (RenderSnapshot).
-        RenderToGraphics(g, _lastDpiX, _lastDpiY, clientSize, includeDetections: false);
+        var worldRect = _mapInfo.CellSize > 0
+            ? ComputeViewRect(clientSize, g.DpiX, g.DpiY)
+            : RectangleF.Empty;
+        RenderToGraphics(g, worldRect, clientSize, includeDetections: false);
     }
 
-    private void RenderToGraphics(Graphics g, float dpiX, float dpiY, SizeF clientSize, bool includeDetections)
+    /// <summary>The map rectangle (in unscaled map pixels) currently shown on the player
+    /// screen for the given client size and DPI. Depends only on zoom/center, so any
+    /// output resolution that renders this same rect shows the identical map extent.</summary>
+    private RectangleF ComputeViewRect(SizeF clientSize, float dpiX, float dpiY)
+    {
+        float zoomX = dpiX / _mapInfo.CellSize * _zoomFactor;
+        float zoomY = dpiY / _mapInfo.CellSize * _zoomFactor;
+        float viewWidth = clientSize.Width / zoomX;
+        float viewHeight = clientSize.Height / zoomY;
+        return new RectangleF(
+            _centerUnscaled.X - viewWidth / 2,
+            _centerUnscaled.Y - viewHeight / 2,
+            viewWidth, viewHeight);
+    }
+
+    // Renders the given world rect into an output of the given pixel size. The output
+    // resolution is decoupled from the map extent, so a low-res snapshot shows exactly the
+    // same region as the full-res player screen — essential for the detector to align the
+    // warped camera frame against this reference.
+    private void RenderToGraphics(Graphics g, RectangleF worldRect, SizeF outputSize, bool includeDetections)
     {
         if (_playersImage == null) return;
         if (_mapInfo.CellSize <= 0)
         {
             g.DrawImage(_playersImage, 0, 0);
-            DrawCornerFiducials(g, clientSize);
+            DrawCornerFiducials(g, outputSize);
             return;
         }
 
-        float zoomX = dpiX / _mapInfo.CellSize * _zoomFactor;
-        float zoomY = dpiY / _mapInfo.CellSize * _zoomFactor;
-        float viewWidth = clientSize.Width / zoomX;
-        float viewHeight = clientSize.Height / zoomY;
-        var rectInOriginal = new RectangleF(
-            _centerUnscaled.X - viewWidth / 2,
-            _centerUnscaled.Y - viewHeight / 2,
-            viewWidth, viewHeight);
+        float zoomX = outputSize.Width / worldRect.Width;
+        float zoomY = outputSize.Height / worldRect.Height;
+        var rectInOriginal = worldRect;
 
         g.ScaleTransform(zoomX, zoomY);
         g.TranslateTransform(-rectInOriginal.X, -rectInOriginal.Y);
@@ -165,7 +187,7 @@ public class PlayersMap : IDisposable
         }
         if (includeDetections) DrawDetectionOverlay(g, zoomX);
         g.ResetTransform();
-        DrawCornerFiducials(g, clientSize);
+        DrawCornerFiducials(g, outputSize);
     }
 
     private void DrawDetectionOverlay(Graphics g, float zoomX)
@@ -206,17 +228,26 @@ public class PlayersMap : IDisposable
         const int ring = FiducialRingPx;
         int white = FiducialSizePx + 2 * quiet;
         int black = white + 2 * ring;
+        int half = black / 2;
 
-        void DrawAt(int cx, int cy, Bitmap marker)
+        // Marker CENTERS sit at a fixed FRACTION of the view, so they land on the same map
+        // world-point regardless of render resolution (the filmed screen vs the lower-res
+        // detector reference). The detector aligns by mapping these centers to each other,
+        // so they must be resolution-independent. Markers stay a fixed pixel size (the
+        // camera needs the pixels to decode them); only their position is fractional.
+        int fx = Math.Clamp((int)Math.Round(FiducialInsetFrac * w), half, w - half);
+        int fy = Math.Clamp((int)Math.Round(FiducialInsetFrac * h), half, h - half);
+
+        void DrawCentered(int cx, int cy, Bitmap marker)
         {
-            g.FillRectangle(Brushes.Black, cx, cy, black, black);
-            g.FillRectangle(Brushes.White, cx + ring, cy + ring, white, white);
-            g.DrawImage(marker, cx + ring + quiet, cy + ring + quiet, FiducialSizePx, FiducialSizePx);
+            g.FillRectangle(Brushes.Black, cx - half, cy - half, black, black);
+            g.FillRectangle(Brushes.White, cx - half + ring, cy - half + ring, white, white);
+            g.DrawImage(marker, cx - FiducialSizePx / 2, cy - FiducialSizePx / 2, FiducialSizePx, FiducialSizePx);
         }
-        DrawAt(0, 0, markers[0]);
-        DrawAt(w - black, 0, markers[1]);
-        DrawAt(w - black, h - black, markers[2]);
-        DrawAt(0, h - black, markers[3]);
+        DrawCentered(fx, fy, markers[0]);
+        DrawCentered(w - fx, fy, markers[1]);
+        DrawCentered(w - fx, h - fy, markers[2]);
+        DrawCentered(fx, h - fy, markers[3]);
 
         g.InterpolationMode = prevInterp;
         g.CompositingMode = prevComp;
@@ -228,8 +259,21 @@ public class PlayersMap : IDisposable
         var bitmap = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(bitmap);
         g.Clear(Color.Black);
-        RenderToGraphics(g, 96f, 96f, size, includeDetections);
+        // Render the SAME map extent the player screen currently shows, scaled into this
+        // bitmap — so the detector's reference aligns with the warped camera frame.
+        var worldRect = _mapInfo.CellSize > 0 ? LiveViewRect(size) : RectangleF.Empty;
+        RenderToGraphics(g, worldRect, size, includeDetections);
         return bitmap;
+    }
+
+    /// <summary>The world rect shown on the player screen (from its last paint), falling
+    /// back to the requested size at 96 DPI if the player view has not painted yet.</summary>
+    private RectangleF LiveViewRect(Size fallback)
+    {
+        var client = _lastClientSize.Width > 0 ? _lastClientSize : new SizeF(fallback.Width, fallback.Height);
+        float dpiX = _lastDpiX > 0 ? _lastDpiX : 96f;
+        float dpiY = _lastDpiY > 0 ? _lastDpiY : 96f;
+        return ComputeViewRect(client, dpiX, dpiY);
     }
 
     /// <summary>
@@ -240,14 +284,8 @@ public class PlayersMap : IDisposable
     public RectangleF GetSnapshotViewRect(Size size)
     {
         if (_playersImage == null || _mapInfo.CellSize <= 0) return RectangleF.Empty;
-        float zoomX = 96f / _mapInfo.CellSize * _zoomFactor;
-        float zoomY = 96f / _mapInfo.CellSize * _zoomFactor;
-        float viewWidth = size.Width / zoomX;
-        float viewHeight = size.Height / zoomY;
-        return new RectangleF(
-            _centerUnscaled.X - viewWidth / 2,
-            _centerUnscaled.Y - viewHeight / 2,
-            viewWidth, viewHeight);
+        // Must match what RenderSnapshot renders, so detections translate back correctly.
+        return LiveViewRect(size);
     }
 
     public void SetGridVisible(bool show)

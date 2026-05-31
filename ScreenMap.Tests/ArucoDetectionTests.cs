@@ -193,11 +193,10 @@ public class ArucoDetectionTests
         Assert.That(upFound, Is.LessThan(4), "upscaling cannot recover lost detail");
     }
 
-    // Real 4K frames captured after the fix (native-resolution capture). Same camera,
-    // same scene as the failing 720p frame — now the fiducials have enough pixels to
-    // decode. Proves the fix on real hardware.
-    [TestCase("WithObjects/aruco-frame-20260531-140715.png")]
-    [TestCase("WithObjects/aruco-frame-20260531-140733.png")]
+    // Real 4K frame captured after the fix (native-resolution capture) — the fiducials now
+    // have enough pixels to decode on a bright, busy map filmed at an angle. Proves the
+    // capture fix + the black-ring fiducials on real hardware.
+    [TestCase("ScreenMapCaptures/frame-20260531-171645.png")]
     public void RealFrame_4kCapture_DetectsAllFour(string rel)
     {
         var path = System.IO.Path.Combine(TestContext.CurrentContext.TestDirectory, "SampleFrames",
