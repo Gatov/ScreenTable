@@ -18,7 +18,7 @@ public enum DetectStatus
 public sealed class FigurineDetector : IDisposable
 {
     private readonly Dictionary _arucoDict = CvAruco.GetPredefinedDictionary(ArucoMarkers.DictName);
-    private readonly DetectorParameters _params = new();
+    private readonly DetectorParameters _params = ArucoMarkers.CreateDetectorParameters();
 
     // Reusable scratch buffers — avoid per-cycle allocations.
     private Mat _warped;

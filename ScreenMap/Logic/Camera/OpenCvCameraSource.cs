@@ -10,13 +10,19 @@ public sealed class OpenCvCameraSource : ICameraSource
 
     public bool IsOpen => _capture.IsOpened();
 
-    public OpenCvCameraSource(int deviceIndex, int requestedWidth = 1280, int requestedHeight = 720)
+    // Capture at high resolution by default: ArUco fiducials are a small fraction of the
+    // frame, so a downsampled 720p feed starves them of pixels and the 4x4 bits can't be
+    // decoded. Cameras clamp the request to their max supported mode.
+    public OpenCvCameraSource(int deviceIndex, int requestedWidth = 3840, int requestedHeight = 2160)
     {
         _capture = new VideoCapture(deviceIndex, VideoCaptureAPIs.DSHOW);
         if (_capture.IsOpened())
         {
             try
             {
+                // Many 4K USB cameras only expose their high-res modes over MJPG; the
+                // default (YUY2) is capped to low resolution / frame rate.
+                _capture.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('M', 'J', 'P', 'G'));
                 _capture.Set(VideoCaptureProperties.FrameWidth, requestedWidth);
                 _capture.Set(VideoCaptureProperties.FrameHeight, requestedHeight);
             }

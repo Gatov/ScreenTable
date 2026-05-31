@@ -18,6 +18,23 @@ public static class ArucoMarkers
 
     public static readonly int[] CornerIds = { 0, 1, 2, 3 };
 
+    /// <summary>
+    /// Detector parameters tuned for fiducials filmed off a screen: the markers are a
+    /// small fraction of a high-resolution frame, so the default MinMarkerPerimeterRate
+    /// (0.03, relative to image size) would reject them. A wider adaptive-threshold range
+    /// and sub-pixel corner refinement help with screen glare and soft edges.
+    /// </summary>
+    public static DetectorParameters CreateDetectorParameters() => new()
+    {
+        AdaptiveThreshWinSizeMin = 3,
+        AdaptiveThreshWinSizeMax = 23,
+        AdaptiveThreshWinSizeStep = 4,
+        MinMarkerPerimeterRate = 0.01,
+        MaxMarkerPerimeterRate = 4.0,
+        PerspectiveRemoveIgnoredMarginPerCell = 0.10,
+        CornerRefinementMethod = CornerRefineMethod.Subpix,
+    };
+
     private static readonly object _lock = new();
     private static Bitmap[] _cache;
     private static int _cachedSize;
