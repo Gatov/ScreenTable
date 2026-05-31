@@ -10,7 +10,6 @@ public class CameraSettings
     public int DeviceIndex { get; set; } = 0;
     public double IntervalSeconds { get; set; } = 2.0;
     public bool ShowOnGmView { get; set; } = true;
-    public bool ShowOnPlayerView { get; set; } = false;
     public int MinBlobAreaPx { get; set; } = 80;
 
     private static string SettingsPath =>

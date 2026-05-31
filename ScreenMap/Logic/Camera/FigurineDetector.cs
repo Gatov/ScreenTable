@@ -33,6 +33,10 @@ public sealed class FigurineDetector : IDisposable
 
     public int MinBlobAreaPx { get; set; } = 80;
 
+    /// <summary>Grayscale diff above this counts as an object. Fixed (not Otsu) so map
+    /// texture stays below it while a physical object clears it.</summary>
+    public int DiffThreshold { get; set; } = 40;
+
     public DetectStatus Detect(Mat cameraFrame, Bitmap playerView, out FigurineDetection[] detections)
     {
         detections = Array.Empty<FigurineDetection>();
@@ -93,14 +97,26 @@ public sealed class FigurineDetector : IDisposable
         Cv2.CvtColor(_warped, _warpedGray, ColorConversionCodes.BGR2GRAY);
         Cv2.CvtColor(_playerMat, _playerGray, ColorConversionCodes.BGR2GRAY);
 
+        // The camera's rendition of the screen is globally brighter/dimmer than the
+        // digital reference; without correcting that offset every pixel reads as a diff.
+        Cv2.MeanStdDev(_warpedGray, out var warpMean, out _);
+        Cv2.MeanStdDev(_playerGray, out var playerMean, out _);
+        double brightnessDelta = playerMean.Val0 - warpMean.Val0;
+        if (Math.Abs(brightnessDelta) > 1)
+            Cv2.Add(_warpedGray, new Scalar(brightnessDelta), _warpedGray);
+
         EnsureMat(ref _diff, dstH, dstW, MatType.CV_8UC1);
         Cv2.Absdiff(_warpedGray, _playerGray, _diff);
 
         EnsureMat(ref _blur, dstH, dstW, MatType.CV_8UC1);
         Cv2.GaussianBlur(_diff, _blur, new OpenCvSharp.Size(5, 5), 0);
 
+        // Fixed threshold, NOT Otsu: a physical object causes a strong local diff, while
+        // map texture / registration residual stays low after brightness normalization.
+        // Otsu adapts to the noise floor — it erases a clean diff and explodes on a noisy
+        // one — so it is the wrong tool here.
         EnsureMat(ref _thresh, dstH, dstW, MatType.CV_8UC1);
-        Cv2.Threshold(_blur, _thresh, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
+        Cv2.Threshold(_blur, _thresh, DiffThreshold, 255, ThresholdTypes.Binary);
 
         // Mask out the 4 corner regions where the ArUco fiducials live —
         // those always differ between rendered view and warped camera frame.

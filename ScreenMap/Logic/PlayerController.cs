@@ -21,12 +21,10 @@ public class PlayerController
     public Action<MapMessage> OnMessage;
 
     private DetectionStore _detectionStore;
-    private Func<bool> _showDetections;
-    public void SetDetectionOverlay(DetectionStore store, Func<bool> showFlag)
+    public void SetDetectionOverlay(DetectionStore store)
     {
         _detectionStore = store;
-        _showDetections = showFlag;
-        _playersMap?.SetDetectionOverlay(store, showFlag);
+        _playersMap?.SetDetectionOverlay(store);
     }
 
     public void InvalidateSnapshot() => _snapshotDirty = true;
@@ -45,9 +43,9 @@ public class PlayerController
 
     /// <summary>Render a snapshot bitmap for off-screen consumers (e.g. camera detection).
     /// Caller owns and must dispose the returned bitmap. Returns null if no map is loaded.</summary>
-    public Bitmap RenderSnapshotBitmap(Size size)
+    public Bitmap RenderSnapshotBitmap(Size size, bool includeDetections = true)
     {
-        return _playersMap?.RenderSnapshot(size);
+        return _playersMap?.RenderSnapshot(size, includeDetections);
     }
 
     public RectangleF GetSnapshotViewRect(Size size)
@@ -88,7 +86,7 @@ public class PlayerController
         _playersMap.OnMessage += Publish;
         _playersMap.OnRectUpdated += OnMapDirty;
         if (_detectionStore != null)
-            _playersMap.SetDetectionOverlay(_detectionStore, _showDetections);
+            _playersMap.SetDetectionOverlay(_detectionStore);
     }
 
     private void OnMapDirty(RectangleF _) => _snapshotDirty = true;

@@ -29,14 +29,14 @@ public class PlayersMap : IDisposable
     private Color _fogOfWar = Color.Tan;
     private bool _showGrid = true;
     private const int FiducialSizePx = 80;
+    private const int FiducialQuietPx = 12; // white quiet zone around the marker
+    private const int FiducialRingPx = 8;   // black ring around the quiet zone
     private DetectionStore _detectionStore;
-    private Func<bool> _showDetections;
     public string Name { get; private set; }
 
-    public void SetDetectionOverlay(DetectionStore store, Func<bool> showFlag)
+    public void SetDetectionOverlay(DetectionStore store)
     {
         _detectionStore = store;
-        _showDetections = showFlag;
     }
 
 
@@ -111,10 +111,13 @@ public class PlayersMap : IDisposable
         _lastDpiX = g.DpiX;
         _lastDpiY = g.DpiY;
         _lastClientSize = clientSize;
-        RenderToGraphics(g, _lastDpiX, _lastDpiY, clientSize);
+        // The player screen is what the detection camera films — it must NEVER show the
+        // detection overlay, or the circles get filmed back in and pollute detection.
+        // The overlay is added only off-screen for the web/GM (RenderSnapshot).
+        RenderToGraphics(g, _lastDpiX, _lastDpiY, clientSize, includeDetections: false);
     }
 
-    private void RenderToGraphics(Graphics g, float dpiX, float dpiY, SizeF clientSize)
+    private void RenderToGraphics(Graphics g, float dpiX, float dpiY, SizeF clientSize, bool includeDetections)
     {
         if (_playersImage == null) return;
         if (_mapInfo.CellSize <= 0)
@@ -160,14 +163,14 @@ public class PlayersMap : IDisposable
                     g.DrawLine(pen, rectInOriginal.X, i, rectInOriginal.X + rectInOriginal.Width, i);
             }
         }
-        DrawDetectionOverlay(g, zoomX);
+        if (includeDetections) DrawDetectionOverlay(g, zoomX);
         g.ResetTransform();
         DrawCornerFiducials(g, clientSize);
     }
 
     private void DrawDetectionOverlay(Graphics g, float zoomX)
     {
-        if (_detectionStore == null || _showDetections == null || !_showDetections()) return;
+        if (_detectionStore == null) return;
         var dets = _detectionStore.Snapshot();
         if (dets.Length == 0) return;
         var prev = g.CompositingMode;
@@ -187,36 +190,45 @@ public class PlayersMap : IDisposable
     {
         int w = (int)clientSize.Width;
         int h = (int)clientSize.Height;
-        if (w < FiducialSizePx * 2 || h < FiducialSizePx * 2) return;
+        int corner = FiducialSizePx + 2 * (FiducialQuietPx + FiducialRingPx);
+        if (w < corner * 2 || h < corner * 2) return;
         var markers = ArucoMarkers.GetMarkers(FiducialSizePx);
         var prevInterp = g.InterpolationMode;
         var prevComp = g.CompositingMode;
         g.InterpolationMode = InterpolationMode.NearestNeighbor;
         g.CompositingMode = CompositingMode.SourceCopy;
-        // White quiet zone keeps ArUco detection reliable even on dark/textured map content.
-        using (var white = new SolidBrush(Color.White))
+
+        // Each fiducial gets a black ring around a white quiet zone. The white zone alone
+        // vanishes against bright map content (and a black marker border washes out under
+        // glare); the black ring gives a brightness-independent boundary so the detector
+        // can localize the quiet zone on any map.
+        const int quiet = FiducialQuietPx;
+        const int ring = FiducialRingPx;
+        int white = FiducialSizePx + 2 * quiet;
+        int black = white + 2 * ring;
+
+        void DrawAt(int cx, int cy, Bitmap marker)
         {
-            int q = FiducialSizePx + 8;
-            g.FillRectangle(white, 0, 0, q, q);
-            g.FillRectangle(white, w - q, 0, q, q);
-            g.FillRectangle(white, w - q, h - q, q, q);
-            g.FillRectangle(white, 0, h - q, q, q);
+            g.FillRectangle(Brushes.Black, cx, cy, black, black);
+            g.FillRectangle(Brushes.White, cx + ring, cy + ring, white, white);
+            g.DrawImage(marker, cx + ring + quiet, cy + ring + quiet, FiducialSizePx, FiducialSizePx);
         }
-        g.DrawImage(markers[0], 4, 4, FiducialSizePx, FiducialSizePx);
-        g.DrawImage(markers[1], w - FiducialSizePx - 4, 4, FiducialSizePx, FiducialSizePx);
-        g.DrawImage(markers[2], w - FiducialSizePx - 4, h - FiducialSizePx - 4, FiducialSizePx, FiducialSizePx);
-        g.DrawImage(markers[3], 4, h - FiducialSizePx - 4, FiducialSizePx, FiducialSizePx);
+        DrawAt(0, 0, markers[0]);
+        DrawAt(w - black, 0, markers[1]);
+        DrawAt(w - black, h - black, markers[2]);
+        DrawAt(0, h - black, markers[3]);
+
         g.InterpolationMode = prevInterp;
         g.CompositingMode = prevComp;
     }
 
-    public Bitmap RenderSnapshot(Size size)
+    public Bitmap RenderSnapshot(Size size, bool includeDetections = true)
     {
         if (_playersImage == null) return null;
         var bitmap = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(bitmap);
         g.Clear(Color.Black);
-        RenderToGraphics(g, 96f, 96f, size);
+        RenderToGraphics(g, 96f, 96f, size, includeDetections);
         return bitmap;
     }
 

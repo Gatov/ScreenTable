@@ -111,11 +111,32 @@ public sealed class CameraPreviewForm : Form
     {
         try
         {
-            var dir = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            var dir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "ScreenMapCaptures");
+            System.IO.Directory.CreateDirectory(dir);
             var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-            var path = System.IO.Path.Combine(dir, $"aruco-frame-{stamp}.png");
-            Cv2.ImWrite(path, raw);
-            Text = $"Camera Preview — saved {path}";
+
+            // Camera frame — the detector's input.
+            var framePath = System.IO.Path.Combine(dir, $"frame-{stamp}.png");
+            Cv2.ImWrite(framePath, raw);
+
+            // Reference player view — the image the warped frame is diffed against.
+            // Together the pair reproduces the full object-detection pipeline offline.
+            string viewNote = "";
+            using (var view = _service.RenderReferenceView())
+            {
+                if (view != null)
+                {
+                    var viewPath = System.IO.Path.Combine(dir, $"view-{stamp}.png");
+                    view.Save(viewPath, System.Drawing.Imaging.ImageFormat.Png);
+                    viewNote = " + view";
+                }
+                else
+                {
+                    viewNote = " (no reference view — no map?)";
+                }
+            }
+            Text = $"Camera Preview — saved frame-{stamp}{viewNote} to {dir}";
         }
         catch (Exception ex)
         {

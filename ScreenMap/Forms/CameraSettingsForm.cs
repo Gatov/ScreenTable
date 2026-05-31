@@ -13,7 +13,6 @@ public class CameraSettingsForm : Form
     private readonly Label _intervalLabel;
     private readonly CheckBox _enabledCheck;
     private readonly CheckBox _showGmCheck;
-    private readonly CheckBox _showPlayerCheck;
 
     public CameraSettings Result => _settings;
 
@@ -76,15 +75,6 @@ public class CameraSettingsForm : Form
         };
         Controls.Add(_showGmCheck);
 
-        y += 24;
-        _showPlayerCheck = new CheckBox
-        {
-            Text = "Show detections on player view",
-            Location = new Point(12, y),
-            AutoSize = true,
-            Checked = settings.ShowOnPlayerView
-        };
-        Controls.Add(_showPlayerCheck);
 
         var okBtn = new Button
         {
@@ -111,7 +101,6 @@ public class CameraSettingsForm : Form
             _settings.IntervalSeconds = _intervalSlider.Value / 10.0;
             _settings.Enabled = _enabledCheck.Checked;
             _settings.ShowOnGmView = _showGmCheck.Checked;
-            _settings.ShowOnPlayerView = _showPlayerCheck.Checked;
             _settings.Save();
         };
 

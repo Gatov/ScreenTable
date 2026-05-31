@@ -41,7 +41,8 @@ namespace ScreenMap
 
             _cameraSettings = CameraSettings.Load();
             _detectionStore = new DetectionStore();
-            controller.SetDetectionOverlay(_detectionStore, () => _cameraSettings.ShowOnPlayerView);
+            // Player screen never shows detections (it is filmed). The web snapshot does.
+            controller.SetDetectionOverlay(_detectionStore);
             gmMapView1.SetDetectionOverlay(_detectionStore, () => _cameraSettings.ShowOnGmView);
 
             _webServer = new ScreenMapWebServer(size =>
@@ -82,7 +83,9 @@ namespace ScreenMap
             _detectionService?.Dispose();
             _detectionService = new DetectionService(
                 _detectionStore,
-                size => SafeInvoke(() => _controller.RenderSnapshotBitmap(size)),
+                // Detector diffs against a CLEAN map — never include the detection overlay,
+                // or its circles become diffs and feed back as more false detections.
+                size => SafeInvoke(() => _controller.RenderSnapshotBitmap(size, includeDetections: false)),
                 size => SafeInvoke(() => _controller.GetSnapshotViewRect(size)),
                 CameraSnapshotSize);
             _detectionService.DetectionsUpdated += OnDetectionsUpdated;

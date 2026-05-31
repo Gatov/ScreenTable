@@ -37,6 +37,10 @@ public sealed class DetectionService : IDisposable
     public event Action DetectionsUpdated;
     public DetectionStore Store => _store;
 
+    /// <summary>Renders the current player-view reference image the detector diffs the
+    /// warped camera frame against. Used for diagnostics / capturing test fixtures.</summary>
+    public Bitmap RenderReferenceView() => _renderPlayerView?.Invoke(_playerViewSize);
+
     public DetectionService(DetectionStore store, Func<Size, Bitmap> renderPlayerView,
         Func<Size, RectangleF> getViewRect, Size playerViewSize)
     {
