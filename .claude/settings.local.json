@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet build *)"
+      "Bash(dotnet build *)",
+      "Skill(superpowers:brainstorming)",
+      "Skill(superpowers:executing-plans)",
+      "Bash(dotnet restore *)",
+      "PowerShell(Out-Null *)",
+      "Skill(superpowers:verification-before-completion)"
     ]
   }
 }
