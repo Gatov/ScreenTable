@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using Mat = OpenCvSharp.Mat;
 
 namespace ScreenMap.Logic.Camera;
 
@@ -16,11 +17,22 @@ public sealed class DetectionService : IDisposable
     // so teardown on the UI thread can never deadlock against an in-flight tick.
     private readonly object _gate = new();
     private ICameraSource _camera;
-    private bool _ticking;              // a timer callback currently owns the camera.
+    private int _openIndex = -1;          // device index of the currently open camera, or -1.
+    private bool _ticking;                // a timer callback currently owns the camera.
     private ICameraSource _disposePending; // camera detached mid-tick; the tick disposes it.
     private System.Threading.Timer _timer;
-    private CameraSettings _settings;
+    private volatile CameraSettings _settings;
+    private bool _previewActive;          // a preview window wants frames (UI-thread only).
+    private DateTime _lastProcessUtc = DateTime.MinValue;
     private volatile bool _disposed;
+
+    // Latest grabbed frame, published for the preview window. Guarded by _frameLock.
+    private readonly object _frameLock = new();
+    private Mat _latestFrame;
+
+    // When a preview is open we grab fast (so the feed is smooth) but still only run
+    // the (expensive) detection pipeline once per configured interval.
+    private const int PreviewTickMs = 66;
 
     public event Action DetectionsUpdated;
     public DetectionStore Store => _store;
@@ -34,40 +46,98 @@ public sealed class DetectionService : IDisposable
         _playerViewSize = playerViewSize;
     }
 
+    // Must be called on the UI thread (serializes with SetPreviewActive).
     public void Apply(CameraSettings settings)
     {
         _settings = settings;
         _detector.MinBlobAreaPx = settings.MinBlobAreaPx;
-        StopTimer();
-        DetachCamera();
-        if (!settings.Enabled)
+        ReconcileCamera();
+        DetectionsUpdated?.Invoke();
+    }
+
+    /// <summary>
+    /// Opens or closes a standalone camera preview. While active, the camera stays open
+    /// even if detection is disabled, and frames are grabbed fast for a smooth feed.
+    /// Must be called on the UI thread.
+    /// </summary>
+    public void SetPreviewActive(bool active)
+    {
+        if (_disposed) return;
+        _previewActive = active;
+        ReconcileCamera();
+        DetectionsUpdated?.Invoke();
+    }
+
+    /// <summary>Hands the caller a clone of the most recent camera frame (caller disposes it).</summary>
+    public bool TryGetLatestFrame(out Mat frame)
+    {
+        lock (_frameLock)
         {
+            if (_latestFrame == null || _latestFrame.Empty()) { frame = null; return false; }
+            frame = _latestFrame.Clone();
+            return true;
+        }
+    }
+
+    private bool CameraDesired() => (_settings?.Enabled ?? false) || _previewActive;
+
+    // Opens/closes/re-targets the single camera to match the current settings and preview
+    // state, then sets the timer cadence. Only crosses the open/closed boundary when
+    // necessary, so the common paths never re-open (and never self-contend on the device).
+    private void ReconcileCamera()
+    {
+        bool desired = CameraDesired();
+        int wantIndex = _settings?.DeviceIndex ?? 0;
+
+        bool open;
+        int curIndex;
+        lock (_gate) { open = _camera != null; curIndex = _openIndex; }
+
+        if (open && (!desired || curIndex != wantIndex))
+        {
+            StopTimer();
+            DetachCamera();
+            open = false;
+        }
+
+        if (!desired)
+        {
+            StopTimer();
             _store.SetStatus(DetectionStatus.Idle, "off");
-            DetectionsUpdated?.Invoke();
             return;
         }
+
+        if (!open && !OpenCamera(wantIndex)) return;
+
+        int intervalMs = _previewActive
+            ? PreviewTickMs
+            : (int)Math.Max(500, (_settings?.IntervalSeconds ?? 2.0) * 1000);
+        if (_timer == null)
+            _timer = new System.Threading.Timer(OnTick, null, 200, intervalMs);
+        else
+            _timer.Change(200, intervalMs);
+    }
+
+    private bool OpenCamera(int index)
+    {
         ICameraSource cam;
         try
         {
-            cam = new OpenCvCameraSource(settings.DeviceIndex);
+            cam = new OpenCvCameraSource(index);
         }
         catch (Exception ex)
         {
             _store.SetStatus(DetectionStatus.NoDevice, "open failed: " + ex.Message);
-            DetectionsUpdated?.Invoke();
-            return;
+            return false;
         }
         if (!cam.IsOpen)
         {
             cam.Dispose(); // release the failed-open handle immediately, don't hold the device.
-            _store.SetStatus(DetectionStatus.NoDevice, $"no device {settings.DeviceIndex}");
-            DetectionsUpdated?.Invoke();
-            return;
+            _store.SetStatus(DetectionStatus.NoDevice, $"no device {index}");
+            return false;
         }
-        lock (_gate) { _camera = cam; }
-
-        var intervalMs = (int)Math.Max(500, settings.IntervalSeconds * 1000);
-        _timer = new System.Threading.Timer(OnTick, null, 500, intervalMs);
+        lock (_gate) { _camera = cam; _openIndex = index; }
+        return true;
     }
 
     private void OnTick(object _)
@@ -118,6 +188,16 @@ public sealed class DetectionService : IDisposable
             _store.SetStatus(DetectionStatus.Error, "grab failed");
             return;
         }
+
+        PublishFrame(frame);
+
+        // Decouple the grab rate (fast, for a smooth preview) from the detection rate.
+        var settings = _settings;
+        if (settings == null || !settings.Enabled) return;
+        var now = DateTime.UtcNow;
+        if ((now - _lastProcessUtc).TotalSeconds < Math.Max(0.5, settings.IntervalSeconds)) return;
+        _lastProcessUtc = now;
+
         using var playerView = _renderPlayerView(_playerViewSize);
         if (playerView == null)
         {
@@ -158,6 +238,31 @@ public sealed class DetectionService : IDisposable
         return result;
     }
 
+    private void PublishFrame(Mat frame)
+    {
+        lock (_frameLock)
+        {
+            if (_latestFrame != null &&
+                (_latestFrame.Rows != frame.Rows || _latestFrame.Cols != frame.Cols ||
+                 _latestFrame.Type() != frame.Type()))
+            {
+                _latestFrame.Dispose();
+                _latestFrame = null;
+            }
+            if (_latestFrame == null) _latestFrame = frame.Clone();
+            else frame.CopyTo(_latestFrame);
+        }
+    }
+
+    private void ClearLatestFrame()
+    {
+        lock (_frameLock)
+        {
+            _latestFrame?.Dispose();
+            _latestFrame = null;
+        }
+    }
+
     private void StopTimer()
     {
         _timer?.Dispose();
@@ -179,8 +284,10 @@ public sealed class DetectionService : IDisposable
             if (_ticking) _disposePending = _camera;
             else cam = _camera;
             _camera = null;
+            _openIndex = -1;
         }
         cam?.Dispose();
+        ClearLatestFrame();
     }
 
     public void Dispose()
@@ -194,16 +301,18 @@ public sealed class DetectionService : IDisposable
             if (_ticking)
             {
                 // The in-flight tick will dispose the camera (and the detector) on exit.
-                if (_camera != null) { _disposePending = _camera; _camera = null; }
+                if (_camera != null) { _disposePending = _camera; _camera = null; _openIndex = -1; }
             }
             else
             {
                 cam = _camera;
                 _camera = null;
+                _openIndex = -1;
                 disposeDetectorNow = true;
             }
         }
         cam?.Dispose();
         if (disposeDetectorNow) _detector.Dispose();
+        ClearLatestFrame();
     }
 }

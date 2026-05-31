@@ -126,11 +126,14 @@ public class CameraSettingsForm : Form
     private void PopulateDevices()
     {
         _deviceCombo.Items.Clear();
-        var devices = OpenCvCameraSource.EnumerateDevices();
-        foreach (var i in devices) _deviceCombo.Items.Add(i);
-        if (devices.Length == 0) _deviceCombo.Items.Add(0);
-        var preferred = _settings.DeviceIndex;
-        var idx = _deviceCombo.Items.IndexOf(preferred);
+        // Always include the configured device: a device currently in use (e.g. by an
+        // open preview) fails the exclusive DSHOW probe and would otherwise vanish.
+        var indices = new System.Collections.Generic.SortedSet<int>(OpenCvCameraSource.EnumerateDevices())
+        {
+            _settings.DeviceIndex
+        };
+        foreach (var i in indices) _deviceCombo.Items.Add(i);
+        var idx = _deviceCombo.Items.IndexOf(_settings.DeviceIndex);
         _deviceCombo.SelectedIndex = idx >= 0 ? idx : 0;
     }
 }

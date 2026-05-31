@@ -20,6 +20,7 @@ namespace ScreenMap
         private CameraSettings _cameraSettings;
         private DetectionStore _detectionStore;
         private DetectionService _detectionService;
+        private CameraPreviewForm _previewForm;
         private PlayerController _controller;
         private static readonly Size CameraSnapshotSize = new Size(960, 540);
 
@@ -67,6 +68,7 @@ namespace ScreenMap
 
             FormClosed += (_, _) =>
             {
+                _previewForm?.Dispose();
                 _detectionService?.Dispose();
                 _webServer.Dispose();
                 _tunnel?.Dispose();
@@ -131,6 +133,18 @@ namespace ScreenMap
                 gmMapView1.InvalidateOverlay();
                 _controller.InvalidateSnapshot();
             }
+        }
+
+        private void barButtonItemPreview_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        {
+            if (_previewForm != null && !_previewForm.IsDisposed)
+            {
+                _previewForm.Activate();
+                return;
+            }
+            _previewForm = new CameraPreviewForm(_detectionService);
+            _previewForm.FormClosed += (_, _) => _previewForm = null;
+            _previewForm.Show(this);
         }
 
         private void GmMapViewOnToolChange(ITool obj)

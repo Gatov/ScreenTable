@@ -53,6 +53,7 @@ namespace ScreenMap
             barCheckItemGrid = new DevExpress.XtraBars.BarCheckItem();
             barButtonItemShare = new DevExpress.XtraBars.BarButtonItem();
             barButtonItemCamera = new DevExpress.XtraBars.BarButtonItem();
+            barButtonItemPreview = new DevExpress.XtraBars.BarButtonItem();
             barStaticItemCameraStatus = new DevExpress.XtraBars.BarStaticItem();
             barListItemBrushes = new DevExpress.XtraBars.BarListItem();
             bar3 = new DevExpress.XtraBars.Bar();
@@ -86,8 +87,8 @@ namespace ScreenMap
             barManager1.DockControls.Add(barDockControlLeft);
             barManager1.DockControls.Add(barDockControlRight);
             barManager1.Form = this;
-            barManager1.Items.AddRange(new DevExpress.XtraBars.BarItem[] { barCheckItemCalibrate, barButtonItemSave, barListItemBrushes, barCheckItemMarks, barStaticItemHint, barCheckItemGrid, barButtonItemShare, barButtonItemCamera, barStaticItemCameraStatus });
-            barManager1.MaxItemId = 11;
+            barManager1.Items.AddRange(new DevExpress.XtraBars.BarItem[] { barCheckItemCalibrate, barButtonItemSave, barListItemBrushes, barCheckItemMarks, barStaticItemHint, barCheckItemGrid, barButtonItemShare, barButtonItemCamera, barButtonItemPreview, barStaticItemCameraStatus });
+            barManager1.MaxItemId = 12;
             barManager1.StatusBar = bar3;
             // 
             // bar1
@@ -96,7 +97,7 @@ namespace ScreenMap
             bar1.DockCol = 0;
             bar1.DockRow = 0;
             bar1.DockStyle = DevExpress.XtraBars.BarDockStyle.Top;
-            bar1.LinksPersistInfo.AddRange(new DevExpress.XtraBars.LinkPersistInfo[] { new DevExpress.XtraBars.LinkPersistInfo(barButtonItemSave), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemCalibrate, true), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemMarks), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemGrid, true), new DevExpress.XtraBars.LinkPersistInfo(barListItemBrushes, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemShare, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemCamera, true) });
+            bar1.LinksPersistInfo.AddRange(new DevExpress.XtraBars.LinkPersistInfo[] { new DevExpress.XtraBars.LinkPersistInfo(barButtonItemSave), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemCalibrate, true), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemMarks), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemGrid, true), new DevExpress.XtraBars.LinkPersistInfo(barListItemBrushes, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemShare, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemCamera, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemPreview) });
             bar1.Text = "Tools";
             // 
             // barButtonItemSave
@@ -161,6 +162,13 @@ namespace ScreenMap
             barButtonItemCamera.Id = 9;
             barButtonItemCamera.Name = "barButtonItemCamera";
             barButtonItemCamera.ItemClick += barButtonItemCamera_ItemClick;
+            //
+            // barButtonItemPreview
+            //
+            barButtonItemPreview.Caption = "Preview";
+            barButtonItemPreview.Id = 11;
+            barButtonItemPreview.Name = "barButtonItemPreview";
+            barButtonItemPreview.ItemClick += barButtonItemPreview_ItemClick;
             //
             // barStaticItemCameraStatus
             //
@@ -287,6 +295,7 @@ namespace ScreenMap
         private DevExpress.XtraBars.BarCheckItem barCheckItemGrid;
         private DevExpress.XtraBars.BarButtonItem barButtonItemShare;
         private DevExpress.XtraBars.BarButtonItem barButtonItemCamera;
+        private DevExpress.XtraBars.BarButtonItem barButtonItemPreview;
         private DevExpress.XtraBars.BarStaticItem barStaticItemCameraStatus;
     }
 }
