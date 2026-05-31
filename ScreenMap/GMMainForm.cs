@@ -114,10 +114,18 @@ namespace ScreenMap
 
         private void barButtonItemCamera_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
         {
-            using var dlg = new CameraSettingsForm(_cameraSettings);
-            if (dlg.ShowDialog(this) == DialogResult.OK)
+            // Release our camera handle first: the dialog probes device indices by
+            // opening each one, and DSHOW is exclusive — a held device would fail to
+            // probe and vanish from the list (locking the camera onto ourselves).
+            _detectionService.Apply(new CameraSettings { Enabled = false });
+            try
             {
-                _cameraSettings = dlg.Result;
+                using var dlg = new CameraSettingsForm(_cameraSettings);
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                    _cameraSettings = dlg.Result;
+            }
+            finally
+            {
                 _detectionService.Apply(_cameraSettings);
                 UpdateCameraStatus();
                 gmMapView1.InvalidateOverlay();

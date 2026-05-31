@@ -1,6 +1,5 @@
 using System;
 using System.Drawing;
-using System.Threading;
 
 namespace ScreenMap.Logic.Camera;
 
@@ -12,10 +11,15 @@ public sealed class DetectionService : IDisposable
     private readonly DetectionStore _store;
     private readonly FigurineDetector _detector = new();
 
+    // _gate guards the camera lifecycle fields below. It is held only for short,
+    // non-blocking sections — never across RunCycle (which Invokes the UI thread),
+    // so teardown on the UI thread can never deadlock against an in-flight tick.
+    private readonly object _gate = new();
     private ICameraSource _camera;
+    private bool _ticking;              // a timer callback currently owns the camera.
+    private ICameraSource _disposePending; // camera detached mid-tick; the tick disposes it.
     private System.Threading.Timer _timer;
     private CameraSettings _settings;
-    private int _running; // 0/1 — single-flight guard for the timer callback.
     private volatile bool _disposed;
 
     public event Action DetectionsUpdated;
@@ -35,22 +39,17 @@ public sealed class DetectionService : IDisposable
         _settings = settings;
         _detector.MinBlobAreaPx = settings.MinBlobAreaPx;
         StopTimer();
-        DisposeCamera();
+        DetachCamera();
         if (!settings.Enabled)
         {
             _store.SetStatus(DetectionStatus.Idle, "off");
             DetectionsUpdated?.Invoke();
             return;
         }
+        ICameraSource cam;
         try
         {
-            _camera = new OpenCvCameraSource(settings.DeviceIndex);
-            if (!_camera.IsOpen)
-            {
-                _store.SetStatus(DetectionStatus.NoDevice, $"no device {settings.DeviceIndex}");
-                DetectionsUpdated?.Invoke();
-                return;
-            }
+            cam = new OpenCvCameraSource(settings.DeviceIndex);
         }
         catch (Exception ex)
         {
@@ -58,6 +57,14 @@ public sealed class DetectionService : IDisposable
             DetectionsUpdated?.Invoke();
             return;
         }
+        if (!cam.IsOpen)
+        {
+            cam.Dispose(); // release the failed-open handle immediately, don't hold the device.
+            _store.SetStatus(DetectionStatus.NoDevice, $"no device {settings.DeviceIndex}");
+            DetectionsUpdated?.Invoke();
+            return;
+        }
+        lock (_gate) { _camera = cam; }
 
         var intervalMs = (int)Math.Max(500, settings.IntervalSeconds * 1000);
         _timer = new System.Threading.Timer(OnTick, null, 500, intervalMs);
@@ -65,11 +72,18 @@ public sealed class DetectionService : IDisposable
 
     private void OnTick(object _)
     {
-        if (_disposed) return;
-        if (Interlocked.Exchange(ref _running, 1) == 1) return;
+        ICameraSource cam;
+        lock (_gate)
+        {
+            // Claim the camera. Single-flight (_ticking) and stop checks live under the
+            // same lock as teardown, so we never run RunCycle on a disposed camera.
+            if (_disposed || _camera == null || _ticking) return;
+            _ticking = true;
+            cam = _camera;
+        }
         try
         {
-            RunCycle();
+            RunCycle(cam);
         }
         catch (Exception ex)
         {
@@ -77,19 +91,29 @@ public sealed class DetectionService : IDisposable
         }
         finally
         {
-            Interlocked.Exchange(ref _running, 0);
+            ICameraSource toDispose = null;
+            bool disposeDetector = false;
+            lock (_gate)
+            {
+                _ticking = false;
+                // Teardown ran while we held the camera — we own its disposal now.
+                if (_disposePending != null) { toDispose = _disposePending; _disposePending = null; }
+                if (_disposed) disposeDetector = true;
+            }
+            toDispose?.Dispose();
+            if (disposeDetector) _detector.Dispose();
             DetectionsUpdated?.Invoke();
         }
     }
 
-    private void RunCycle()
+    private void RunCycle(ICameraSource camera)
     {
-        if (_camera == null || !_camera.IsOpen)
+        if (!camera.IsOpen)
         {
             _store.SetStatus(DetectionStatus.NoDevice, "camera closed");
             return;
         }
-        if (!_camera.TryGrab(out var frame))
+        if (!camera.TryGrab(out var frame))
         {
             _store.SetStatus(DetectionStatus.Error, "grab failed");
             return;
@@ -140,17 +164,46 @@ public sealed class DetectionService : IDisposable
         _timer = null;
     }
 
-    private void DisposeCamera()
+    /// <summary>
+    /// Detaches the current camera. If a tick owns it right now, the camera is handed
+    /// to that tick to dispose when it finishes — so we never dispose a VideoCapture
+    /// while a native Read is in flight (which can leave the DSHOW device locked).
+    /// Never blocks, so it is safe to call from the UI thread.
+    /// </summary>
+    private void DetachCamera()
     {
-        _camera?.Dispose();
-        _camera = null;
+        ICameraSource cam = null;
+        lock (_gate)
+        {
+            if (_camera == null) return;
+            if (_ticking) _disposePending = _camera;
+            else cam = _camera;
+            _camera = null;
+        }
+        cam?.Dispose();
     }
 
     public void Dispose()
     {
         _disposed = true;
         StopTimer();
-        DisposeCamera();
-        _detector.Dispose();
+        ICameraSource cam = null;
+        bool disposeDetectorNow = false;
+        lock (_gate)
+        {
+            if (_ticking)
+            {
+                // The in-flight tick will dispose the camera (and the detector) on exit.
+                if (_camera != null) { _disposePending = _camera; _camera = null; }
+            }
+            else
+            {
+                cam = _camera;
+                _camera = null;
+                disposeDetectorNow = true;
+            }
+        }
+        cam?.Dispose();
+        if (disposeDetectorNow) _detector.Dispose();
     }
 }
