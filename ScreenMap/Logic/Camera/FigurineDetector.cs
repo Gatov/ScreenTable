@@ -35,7 +35,7 @@ public sealed class FigurineDetector : IDisposable
 
     /// <summary>Grayscale diff above this counts as an object. Fixed (not Otsu) so map
     /// texture / screen-photo appearance noise stays below it while an object clears it.</summary>
-    public int DiffThreshold { get; set; } = 60;
+    public int DiffThreshold { get; set; } = 70;
 
     public DetectStatus Detect(Mat cameraFrame, Bitmap playerView, out FigurineDetection[] detections)
     {

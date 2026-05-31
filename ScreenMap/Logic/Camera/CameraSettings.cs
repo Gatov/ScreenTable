@@ -11,6 +11,7 @@ public class CameraSettings
     public double IntervalSeconds { get; set; } = 2.0;
     public bool ShowOnGmView { get; set; } = true;
     public int MinBlobAreaPx { get; set; } = 800;
+    public int DiffThreshold { get; set; } = 70;
 
     private static string SettingsPath =>
         Path.Combine(AppContext.BaseDirectory, "CameraSettings.json");

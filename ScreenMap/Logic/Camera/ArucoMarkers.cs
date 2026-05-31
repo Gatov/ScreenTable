@@ -27,7 +27,9 @@ public static class ArucoMarkers
     public static DetectorParameters CreateDetectorParameters() => new()
     {
         AdaptiveThreshWinSizeMin = 3,
-        AdaptiveThreshWinSizeMax = 23,
+        // Wide window range: in a 4K frame the fiducials are large, and a steeply angled
+        // corner marker needs a bigger adaptive-threshold window to binarize cleanly.
+        AdaptiveThreshWinSizeMax = 53,
         AdaptiveThreshWinSizeStep = 4,
         MinMarkerPerimeterRate = 0.01,
         MaxMarkerPerimeterRate = 4.0,

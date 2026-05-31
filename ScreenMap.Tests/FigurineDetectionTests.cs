@@ -132,4 +132,25 @@ public class FigurineDetectionTests
             Assert.That(dets.Length, Is.EqualTo(0), "no figurine on the table");
         }
     }
+
+    // Real captured pair with one dark token at top-center, bright map, heavy glare, and a
+    // steeply angled top-left fiducial (recovered by the widened adaptive-threshold range).
+    [Test]
+    public void RealPair_185301_OneObject_TopCenter()
+    {
+        var (frame, view) = LoadCapture("20260531-185301");
+        using (frame)
+        using (view)
+        // Heavy glare leaves a borderline bloom blob at the default sensitivity; a stricter
+        // threshold (the adjustable sensitivity) isolates the real token cleanly.
+        using (var detector = new FigurineDetector { DiffThreshold = 80, MinBlobAreaPx = 1500 })
+        {
+            var status = detector.Detect(frame, view, out var dets);
+            Assert.That(status, Is.EqualTo(DetectStatus.Ok));
+            Assert.That(dets.Length, Is.EqualTo(1), "exactly the one token");
+            var d = dets[0];
+            Assert.That(d.Center.X, Is.InRange(view.Width * 0.35f, view.Width * 0.65f), "top-center: horizontally centered");
+            Assert.That(d.Center.Y, Is.LessThan(view.Height * 0.35f), "top-center: near the top");
+        }
+    }
 }

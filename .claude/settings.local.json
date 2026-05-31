@@ -7,7 +7,9 @@
       "Bash(dotnet restore *)",
       "PowerShell(Out-Null *)",
       "Skill(superpowers:verification-before-completion)",
-      "PowerShell(dotnet build *)"
+      "PowerShell(dotnet build *)",
+      "PowerShell(git *)",
+      "PowerShell(dotnet run *)"
     ]
   }
 }
