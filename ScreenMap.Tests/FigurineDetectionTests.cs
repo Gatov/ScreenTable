@@ -79,6 +79,35 @@ public class FigurineDetectionTests
     }
 
     [Test]
+    public void ProduceCrops_IsolatesObject_AsCircularMaskedCrop()
+    {
+        using var view = RenderScene(960, 540);
+        using var cameraBgra = BitmapConverter.ToMat(RenderScene(1280, 720));
+        using var camera = cameraBgra.CvtColor(ColorConversionCodes.BGRA2BGR);
+        Cv2.Add(camera, new Scalar(40, 40, 40), camera);
+        var objCenter = new OpenCvSharp.Point(300, 360);
+        Cv2.Circle(camera, objCenter, 26, new Scalar(0, 0, 0), -1);
+
+        using var detector = new FigurineDetector { MinBlobAreaPx = 200, ProduceCrops = true };
+        var status = detector.Detect(camera, view, out var dets);
+
+        Assert.That(status, Is.EqualTo(DetectStatus.Ok));
+        Assert.That(dets.Length, Is.EqualTo(1));
+        var crops = detector.LastCrops;
+        Assert.That(crops.Length, Is.EqualTo(1), "one crop per detection");
+
+        var crop = crops[0];
+        Assert.That(crop.Empty(), Is.False, "crop must hold pixels");
+        var d = dets[0];
+        // Square bounding box sized ~ 2*radius (clamped to image bounds).
+        Assert.That(crop.Width, Is.InRange((int)(d.Radius * 2) - 4, (int)(d.Radius * 2) + 4));
+        Assert.That(crop.Height, Is.EqualTo(crop.Width));
+        // A corner pixel sits outside the inscribed disc → blacked out by the circular mask.
+        var corner = crop.At<Vec3b>(0, 0);
+        Assert.That(corner.Item0 + corner.Item1 + corner.Item2, Is.EqualTo(0), "corner outside disc is black");
+    }
+
+    [Test]
     public void NoObject_CleanScene_YieldsNoFalsePositives()
     {
         using var view = RenderScene(960, 540);

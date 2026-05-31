@@ -18,11 +18,13 @@ public sealed class CameraPreviewForm : Form
 {
     private readonly DetectionService _service;
     private readonly PictureBox _picture;
+    private readonly CheckBox _showCrops;
     private readonly System.Windows.Forms.Timer _uiTimer;
     private readonly Dictionary _dict = CvAruco.GetPredefinedDictionary(ArucoMarkers.DictName);
     private readonly DetectorParameters _params = ArucoMarkers.CreateDetectorParameters();
     private volatile bool _saveRequested;
     private const int DisplayMaxWidth = 1280;
+    private const int CropTile = 160; // px per isolated-figurine thumbnail in the montage
 
     public CameraPreviewForm(DetectionService service)
     {
@@ -40,6 +42,17 @@ public sealed class CameraPreviewForm : Form
         };
         _picture.Click += (_, _) => _saveRequested = true;
         Controls.Add(_picture);
+
+        // Added after the Fill picture so it docks above it (WinForms docks in reverse z-order).
+        _showCrops = new CheckBox
+        {
+            Dock = DockStyle.Top,
+            Text = "Show isolated figurines",
+            Height = 28,
+            BackColor = Color.FromArgb(32, 32, 32),
+            ForeColor = Color.White
+        };
+        Controls.Add(_showCrops);
 
         _uiTimer = new System.Windows.Forms.Timer { Interval = 66 }; // ~15 fps
         _uiTimer.Tick += OnUiTick;
@@ -102,9 +115,37 @@ public sealed class CameraPreviewForm : Form
             scaled?.Dispose();
         }
 
+        // When toggled on, replace the feed with a montage of the isolated figurine crops.
+        if (_showCrops.Checked && _service.TryGetLatestCrops(out var crops))
+        {
+            var montage = BuildCropMontage(crops);
+            foreach (var c in crops) c.Dispose();
+            if (montage != null) { bitmap.Dispose(); bitmap = montage; }
+        }
+
         var previous = _picture.Image;
         _picture.Image = bitmap;
         previous?.Dispose();
+    }
+
+    /// <summary>Lays the circular-masked crops out in a single horizontal strip of fixed-size
+    /// tiles on a black canvas. Returns null when there is nothing to show.</summary>
+    private static Bitmap BuildCropMontage(Mat[] crops)
+    {
+        if (crops == null || crops.Length == 0) return null;
+        int n = crops.Length;
+        var canvas = new Bitmap(CropTile * n, CropTile);
+        using (var g = Graphics.FromImage(canvas))
+        {
+            g.Clear(Color.Black);
+            for (int i = 0; i < n; i++)
+            {
+                if (crops[i].Empty()) continue;
+                using var thumb = BitmapConverter.ToBitmap(crops[i]);
+                g.DrawImage(thumb, new Rectangle(i * CropTile, 0, CropTile, CropTile));
+            }
+        }
+        return canvas;
     }
 
     private void SaveDiagnostic(Mat raw)

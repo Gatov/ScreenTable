@@ -14,6 +14,7 @@ public class ScreenMapWebServer : IDisposable
 
     private readonly HttpListener _listener;
     private readonly Func<Size, byte[]> _renderSnapshot;
+    private readonly Func<byte[]> _renderFigurines;
     private CancellationTokenSource _cts;
     private Task _listenerTask;
 
@@ -41,9 +42,10 @@ public class ScreenMapWebServer : IDisposable
         </html>
         """;
 
-    public ScreenMapWebServer(Func<Size, byte[]> renderSnapshot)
+    public ScreenMapWebServer(Func<Size, byte[]> renderSnapshot, Func<byte[]> renderFigurines = null)
     {
         _renderSnapshot = renderSnapshot;
+        _renderFigurines = renderFigurines;
         _listener = new HttpListener();
         _listener.Prefixes.Add($"http://+:{Port}/");
     }
@@ -72,10 +74,32 @@ public class ScreenMapWebServer : IDisposable
     private void HandleRequest(HttpListenerContext context)
     {
         var path = context.Request.Url?.AbsolutePath ?? "";
-        if (path.EndsWith("/image.png", StringComparison.OrdinalIgnoreCase))
+        if (path.EndsWith("/figurines.png", StringComparison.OrdinalIgnoreCase))
+            ServeFigurines(context);
+        else if (path.EndsWith("/image.png", StringComparison.OrdinalIgnoreCase))
             ServeImage(context);
         else
             ServeHtml(context);
+    }
+
+    private void ServeFigurines(HttpListenerContext context)
+    {
+        try
+        {
+            var png = _renderFigurines?.Invoke();
+            if (png == null)
+            {
+                context.Response.StatusCode = 503;
+                context.Response.Close();
+                return;
+            }
+            context.Response.ContentType = "image/png";
+            context.Response.Headers["Cache-Control"] = "no-cache, no-store";
+            context.Response.ContentLength64 = png.Length;
+            context.Response.OutputStream.Write(png, 0, png.Length);
+        }
+        catch { context.Response.StatusCode = 500; }
+        finally { context.Response.Close(); }
     }
 
     private void ServeImage(HttpListenerContext context)

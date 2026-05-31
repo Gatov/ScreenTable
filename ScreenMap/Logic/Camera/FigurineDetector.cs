@@ -37,9 +37,21 @@ public sealed class FigurineDetector : IDisposable
     /// texture / screen-photo appearance noise stays below it while an object clears it.</summary>
     public int DiffThreshold { get; set; } = 70;
 
+    /// <summary>When set, <see cref="Detect"/> also crops each detected figurine out of the
+    /// aligned frame into <see cref="LastCrops"/>. Off by default so the overlay-only path
+    /// stays allocation-free.</summary>
+    public bool ProduceCrops { get; set; }
+
+    /// <summary>Isolated, circular-masked crops of the figurines from the most recent
+    /// <see cref="Detect"/>, aligned 1:1 with the returned detections (empty unless
+    /// <see cref="ProduceCrops"/> is set). Owned by the detector — replaced/disposed on the
+    /// next Detect; clone any you need to keep.</summary>
+    public Mat[] LastCrops { get; private set; } = Array.Empty<Mat>();
+
     public DetectStatus Detect(Mat cameraFrame, Bitmap playerView, out FigurineDetection[] detections)
     {
         detections = Array.Empty<FigurineDetection>();
+        DisposeCrops();
         if (cameraFrame == null || cameraFrame.Empty() || playerView == null) return DetectStatus.Empty;
 
         var src = DetectMarkerCenters(cameraFrame);
@@ -134,7 +146,45 @@ public sealed class FigurineDetector : IDisposable
             list.Add(new FigurineDetection(new PointF(center.X, center.Y), radius));
         }
         detections = list.ToArray();
+
+        if (ProduceCrops && detections.Length > 0)
+            LastCrops = CropDetections(detections);
+
         return DetectStatus.Ok;
+    }
+
+    /// <summary>Cuts each detection out of the aligned frame as a circular-masked crop.
+    /// Detections are in the warped/reference coordinate space, so they index <see cref="_warped"/>
+    /// directly.</summary>
+    // TODO: crops are taken from the deskewed/aligned frame. To show the figurine in true
+    // camera perspective, invert the perspective transform (h) and crop the raw cameraFrame.
+    private Mat[] CropDetections(FigurineDetection[] detections)
+    {
+        var bounds = new Rect(0, 0, _warped.Cols, _warped.Rows);
+        var crops = new Mat[detections.Length];
+        for (int i = 0; i < detections.Length; i++)
+        {
+            var d = detections[i];
+            int r = (int)Math.Ceiling(d.Radius);
+            int cx = (int)Math.Round(d.Center.X);
+            int cy = (int)Math.Round(d.Center.Y);
+            var roi = new Rect(cx - r, cy - r, r * 2, r * 2).Intersect(bounds);
+            if (roi.Width <= 0 || roi.Height <= 0) { crops[i] = new Mat(); continue; }
+
+            using var region = new Mat(_warped, roi);
+            using var mask = new Mat(roi.Height, roi.Width, MatType.CV_8UC1, Scalar.Black);
+            Cv2.Circle(mask, new OpenCvSharp.Point(cx - roi.X, cy - roi.Y), r, Scalar.White, -1);
+            var masked = new Mat(roi.Height, roi.Width, MatType.CV_8UC3, Scalar.Black);
+            region.CopyTo(masked, mask);
+            crops[i] = masked;
+        }
+        return crops;
+    }
+
+    private void DisposeCrops()
+    {
+        foreach (var c in LastCrops) c?.Dispose();
+        LastCrops = Array.Empty<Mat>();
     }
 
     /// <summary>Detects the four corner fiducials and returns id -> centroid, or null if
@@ -206,6 +256,7 @@ public sealed class FigurineDetector : IDisposable
 
     public void Dispose()
     {
+        DisposeCrops();
         _arucoDict?.Dispose();
         _warped?.Dispose();
         _playerMat?.Dispose();

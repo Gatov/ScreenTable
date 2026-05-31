@@ -30,6 +30,12 @@ public sealed class DetectionService : IDisposable
     private readonly object _frameLock = new();
     private Mat _latestFrame;
 
+    // Latest isolated figurine crops, published for the preview / web view. Guarded by
+    // _cropLock. Produced only while a consumer wants them (preview open or web opted in).
+    private readonly object _cropLock = new();
+    private Mat[] _latestCrops = Array.Empty<Mat>();
+    private volatile bool _webCropsWanted;
+
     // When a preview is open we grab fast (so the feed is smooth) but still only run
     // the (expensive) detection pipeline once per configured interval.
     private const int PreviewTickMs = 66;
@@ -81,6 +87,54 @@ public sealed class DetectionService : IDisposable
             if (_latestFrame == null || _latestFrame.Empty()) { frame = null; return false; }
             frame = _latestFrame.Clone();
             return true;
+        }
+    }
+
+    /// <summary>Opts the web view in/out of crop production. The preview opts in implicitly
+    /// while it is open (see <see cref="SetPreviewActive"/>).</summary>
+    public void SetWebCropsWanted(bool wanted) => _webCropsWanted = wanted;
+
+    /// <summary>Hands the caller clones of the most recent figurine crops (caller disposes
+    /// each). Returns false when none were produced this cycle.</summary>
+    public bool TryGetLatestCrops(out Mat[] crops)
+    {
+        lock (_cropLock)
+        {
+            if (_latestCrops.Length == 0) { crops = Array.Empty<Mat>(); return false; }
+            crops = new Mat[_latestCrops.Length];
+            for (int i = 0; i < _latestCrops.Length; i++) crops[i] = _latestCrops[i].Clone();
+            return true;
+        }
+    }
+
+    private const int CropTilePx = 160; // px per figurine thumbnail in the web montage
+
+    /// <summary>Renders the latest figurine crops as a single horizontal-strip PNG for the web
+    /// view, opting crop production in on first call. Returns null when none are available
+    /// (e.g. before the next detection cycle runs).</summary>
+    public byte[] RenderCropsMontagePng()
+    {
+        _webCropsWanted = true;
+        if (!TryGetLatestCrops(out var crops)) return null;
+        try
+        {
+            using var montage = new Mat(CropTilePx, CropTilePx * crops.Length,
+                OpenCvSharp.MatType.CV_8UC3, OpenCvSharp.Scalar.Black);
+            for (int i = 0; i < crops.Length; i++)
+            {
+                if (crops[i].Empty()) continue;
+                using var tile = new Mat();
+                OpenCvSharp.Cv2.Resize(crops[i], tile, new OpenCvSharp.Size(CropTilePx, CropTilePx));
+                var dst = new Mat(montage, new OpenCvSharp.Rect(i * CropTilePx, 0, CropTilePx, CropTilePx));
+                tile.CopyTo(dst);
+                dst.Dispose();
+            }
+            OpenCvSharp.Cv2.ImEncode(".png", montage, out var bytes);
+            return bytes;
+        }
+        finally
+        {
+            foreach (var c in crops) c.Dispose();
         }
     }
 
@@ -210,12 +264,14 @@ public sealed class DetectionService : IDisposable
             return;
         }
         var viewRect = _getViewRect(_playerViewSize);
+        _detector.ProduceCrops = _previewActive || _webCropsWanted;
         var result = _detector.Detect(frame, playerView, out var dets);
         switch (result)
         {
             case DetectStatus.Ok:
                 var translated = TranslateToUnscaled(dets, viewRect, _playerViewSize);
                 _store.Update(translated, DetectionStatus.Ok, $"ok ({translated.Length})");
+                if (_detector.ProduceCrops) PublishCrops(_detector.LastCrops);
                 break;
             case DetectStatus.NoMarkers:
                 _store.SetStatus(DetectionStatus.NoMarkers, "no markers");
@@ -268,6 +324,28 @@ public sealed class DetectionService : IDisposable
         }
     }
 
+    // Owns its own clones — the detector reuses/disposes LastCrops on the next cycle.
+    private void PublishCrops(Mat[] crops)
+    {
+        lock (_cropLock)
+        {
+            foreach (var c in _latestCrops) c?.Dispose();
+            if (crops == null || crops.Length == 0) { _latestCrops = Array.Empty<Mat>(); return; }
+            var copy = new Mat[crops.Length];
+            for (int i = 0; i < crops.Length; i++) copy[i] = crops[i].Clone();
+            _latestCrops = copy;
+        }
+    }
+
+    private void ClearLatestCrops()
+    {
+        lock (_cropLock)
+        {
+            foreach (var c in _latestCrops) c?.Dispose();
+            _latestCrops = Array.Empty<Mat>();
+        }
+    }
+
     private void StopTimer()
     {
         _timer?.Dispose();
@@ -293,6 +371,7 @@ public sealed class DetectionService : IDisposable
         }
         cam?.Dispose();
         ClearLatestFrame();
+        ClearLatestCrops();
     }
 
     public void Dispose()
@@ -319,5 +398,6 @@ public sealed class DetectionService : IDisposable
         cam?.Dispose();
         if (disposeDetectorNow) _detector.Dispose();
         ClearLatestFrame();
+        ClearLatestCrops();
     }
 }

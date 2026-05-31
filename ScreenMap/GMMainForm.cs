@@ -52,7 +52,9 @@ namespace ScreenMap
                 return InvokeRequired
                     ? (byte[])Invoke(() => controller.RenderSnapshotPng(size))
                     : controller.RenderSnapshotPng(size);
-            });
+            },
+            // /figurines.png — isolated crops of the currently detected figurines.
+            () => _detectionService?.RenderCropsMontagePng());
             try
             {
                 _webServer.Start();
