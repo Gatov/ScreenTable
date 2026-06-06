@@ -99,7 +99,7 @@ OpenCV dependency. Unit tests in `FigurineDetectionTests`:
 - `N = 0`, 3 candidates → returns 3 (below floor, keep all).
 - `N = 0`, smooth descending scores, no cliff → returns 20 (ceiling) when ≥20, else count.
 - `N = 0`, scores with a sharp cliff after index 8 → returns 8.
-- `N = 0`, cliff before index 5 → still returns 5 (floor wins).
+- `N = 0`, tight top-5 cluster then a cliff at index 5 → returns 5 (floor respected).
 
 ## Out of scope
 
