@@ -10,6 +10,9 @@ public class CameraSettings
     public int DeviceIndex { get; set; } = 0;
     public double IntervalSeconds { get; set; } = 2.0;
     public bool ShowOnGmView { get; set; } = true;
+    /// <summary>When true the detection overlay draws the isolated figurine photo at each
+    /// detected location; when false it falls back to the plain green circle marker.</summary>
+    public bool ShowFigurines { get; set; } = true;
     public int MinBlobAreaPx { get; set; } = 800;
     public int DiffThreshold { get; set; } = 70;
 

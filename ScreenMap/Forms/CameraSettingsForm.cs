@@ -17,6 +17,7 @@ public class CameraSettingsForm : Form
     private readonly Label _minSizeLabel;
     private readonly CheckBox _enabledCheck;
     private readonly CheckBox _showGmCheck;
+    private readonly CheckBox _showFiguresCheck;
 
     public CameraSettings Result => _settings;
 
@@ -115,6 +116,16 @@ public class CameraSettingsForm : Form
         };
         Controls.Add(_showGmCheck);
 
+        y += 24;
+        _showFiguresCheck = new CheckBox
+        {
+            Text = "Show figurine images (off = green circles)",
+            Location = new Point(12, y),
+            AutoSize = true,
+            Checked = settings.ShowFigurines
+        };
+        Controls.Add(_showFiguresCheck);
+
         var okBtn = new Button
         {
             Text = "OK",
@@ -142,6 +153,7 @@ public class CameraSettingsForm : Form
             _settings.MinBlobAreaPx = _minSizeSlider.Value;
             _settings.Enabled = _enabledCheck.Checked;
             _settings.ShowOnGmView = _showGmCheck.Checked;
+            _settings.ShowFigurines = _showFiguresCheck.Checked;
             _settings.Save();
         };
 

@@ -42,8 +42,9 @@ namespace ScreenMap
             _cameraSettings = CameraSettings.Load();
             _detectionStore = new DetectionStore();
             // Player screen never shows detections (it is filmed). The web snapshot does.
-            controller.SetDetectionOverlay(_detectionStore);
-            gmMapView1.SetDetectionOverlay(_detectionStore, () => _cameraSettings.ShowOnGmView);
+            controller.SetDetectionOverlay(_detectionStore, () => _cameraSettings.ShowFigurines);
+            gmMapView1.SetDetectionOverlay(_detectionStore,
+                () => _cameraSettings.ShowOnGmView, () => _cameraSettings.ShowFigurines);
 
             _webServer = new ScreenMapWebServer(size =>
             {
@@ -52,9 +53,7 @@ namespace ScreenMap
                 return InvokeRequired
                     ? (byte[])Invoke(() => controller.RenderSnapshotPng(size))
                     : controller.RenderSnapshotPng(size);
-            },
-            // /figurines.png — isolated crops of the currently detected figurines.
-            () => _detectionService?.RenderCropsMontagePng());
+            });
             try
             {
                 _webServer.Start();

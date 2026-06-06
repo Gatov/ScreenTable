@@ -9,7 +9,9 @@
       "Skill(superpowers:verification-before-completion)",
       "PowerShell(dotnet build *)",
       "PowerShell(git *)",
-      "PowerShell(dotnet run *)"
+      "PowerShell(dotnet run *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'Add design spec: figurine crops on the map *)"
     ]
   }
 }

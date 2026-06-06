@@ -37,11 +37,13 @@ public class PlayersMap : IDisposable
     // map misaligns. 0.12*540 = 64.8 > half the black square (60).
     private const float FiducialInsetFrac = 0.12f;
     private DetectionStore _detectionStore;
+    private Func<bool> _showFigurines;
     public string Name { get; private set; }
 
-    public void SetDetectionOverlay(DetectionStore store)
+    public void SetDetectionOverlay(DetectionStore store, Func<bool> showFigurines)
     {
         _detectionStore = store;
+        _showFigurines = showFigurines;
     }
 
 
@@ -193,18 +195,31 @@ public class PlayersMap : IDisposable
     private void DrawDetectionOverlay(Graphics g, float zoomX)
     {
         if (_detectionStore == null) return;
-        var dets = _detectionStore.Snapshot();
+        var (dets, crops) = _detectionStore.SnapshotFrame();
         if (dets.Length == 0) return;
+        bool figs = _showFigurines != null && _showFigurines();
         var prev = g.CompositingMode;
+        var prevInterp = g.InterpolationMode;
         g.CompositingMode = CompositingMode.SourceOver;
         using var fill = new SolidBrush(Color.FromArgb(80, Color.LimeGreen));
         using var pen = new Pen(Color.FromArgb(220, Color.LimeGreen), Math.Max(1f / zoomX, 0.5f));
-        foreach (var d in dets)
+        for (int i = 0; i < dets.Length; i++)
         {
+            var d = dets[i];
             var r = new RectangleF(d.Center.X - d.Radius, d.Center.Y - d.Radius, d.Radius * 2, d.Radius * 2);
-            g.FillEllipse(fill, r);
-            g.DrawEllipse(pen, r);
+            var crop = figs && i < crops.Length ? crops[i] : null;
+            if (crop != null)
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(crop, r);
+            }
+            else
+            {
+                g.FillEllipse(fill, r);
+                g.DrawEllipse(pen, r);
+            }
         }
+        g.InterpolationMode = prevInterp;
         g.CompositingMode = prev;
     }
 

@@ -98,13 +98,17 @@ public class FigurineDetectionTests
 
         var crop = crops[0];
         Assert.That(crop.Empty(), Is.False, "crop must hold pixels");
+        Assert.That(crop.Channels(), Is.EqualTo(4), "BGRA: alpha carries the circular mask");
         var d = dets[0];
         // Square bounding box sized ~ 2*radius (clamped to image bounds).
         Assert.That(crop.Width, Is.InRange((int)(d.Radius * 2) - 4, (int)(d.Radius * 2) + 4));
         Assert.That(crop.Height, Is.EqualTo(crop.Width));
-        // A corner pixel sits outside the inscribed disc → blacked out by the circular mask.
-        var corner = crop.At<Vec3b>(0, 0);
-        Assert.That(corner.Item0 + corner.Item1 + corner.Item2, Is.EqualTo(0), "corner outside disc is black");
+        // A corner pixel sits outside the inscribed disc → transparent (alpha 0); the center
+        // sits inside → opaque (alpha 255).
+        var corner = crop.At<Vec4b>(0, 0);
+        Assert.That(corner.Item3, Is.EqualTo(0), "corner outside disc is transparent");
+        var center = crop.At<Vec4b>(crop.Height / 2, crop.Width / 2);
+        Assert.That(center.Item3, Is.EqualTo(255), "center inside disc is opaque");
     }
 
     [Test]

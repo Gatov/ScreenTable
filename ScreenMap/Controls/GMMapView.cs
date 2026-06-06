@@ -30,10 +30,12 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
 
     private DetectionStore _detectionStore;
     private Func<bool> _showDetections;
-    public void SetDetectionOverlay(DetectionStore store, Func<bool> showFlag)
+    private Func<bool> _showFigurines;
+    public void SetDetectionOverlay(DetectionStore store, Func<bool> showFlag, Func<bool> showFigurines)
     {
         _detectionStore = store;
         _showDetections = showFlag;
+        _showFigurines = showFigurines;
     }
     
     public float ZoomLevel
@@ -202,18 +204,31 @@ public partial class GmMapView : DevExpress.XtraEditors.XtraUserControl, IZoomab
     private void DrawDetectionOverlay(Graphics g)
     {
         if (_detectionStore == null || _showDetections == null || !_showDetections()) return;
-        var dets = _detectionStore.Snapshot();
+        var (dets, crops) = _detectionStore.SnapshotFrame();
         if (dets.Length == 0) return;
+        bool figs = _showFigurines != null && _showFigurines();
         var prev = g.CompositingMode;
+        var prevInterp = g.InterpolationMode;
         g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
         using var fill = new SolidBrush(Color.FromArgb(80, Color.LimeGreen));
         using var pen = new Pen(Color.FromArgb(220, Color.LimeGreen), 1f);
-        foreach (var d in dets)
+        for (int i = 0; i < dets.Length; i++)
         {
+            var d = dets[i];
             var r = new RectangleF(d.Center.X - d.Radius, d.Center.Y - d.Radius, d.Radius * 2, d.Radius * 2);
-            g.FillEllipse(fill, r);
-            g.DrawEllipse(pen, r);
+            var crop = figs && i < crops.Length ? crops[i] : null;
+            if (crop != null)
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(crop, r);
+            }
+            else
+            {
+                g.FillEllipse(fill, r);
+                g.DrawEllipse(pen, r);
+            }
         }
+        g.InterpolationMode = prevInterp;
         g.CompositingMode = prev;
     }
 

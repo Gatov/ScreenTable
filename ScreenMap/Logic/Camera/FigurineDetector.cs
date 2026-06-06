@@ -174,8 +174,13 @@ public sealed class FigurineDetector : IDisposable
             using var region = new Mat(_warped, roi);
             using var mask = new Mat(roi.Height, roi.Width, MatType.CV_8UC1, Scalar.Black);
             Cv2.Circle(mask, new OpenCvSharp.Point(cx - roi.X, cy - roi.Y), r, Scalar.White, -1);
-            var masked = new Mat(roi.Height, roi.Width, MatType.CV_8UC3, Scalar.Black);
-            region.CopyTo(masked, mask);
+            // BGRA crop: color from the frame, alpha = the circular mask. Outside the disc
+            // stays fully zero (transparent) so the map shows through when drawn on the overlay.
+            using var bgra = new Mat();
+            Cv2.CvtColor(region, bgra, ColorConversionCodes.BGR2BGRA);
+            Cv2.InsertChannel(mask, bgra, 3);
+            var masked = new Mat(roi.Height, roi.Width, MatType.CV_8UC4, Scalar.All(0));
+            bgra.CopyTo(masked, mask);
             crops[i] = masked;
         }
         return crops;

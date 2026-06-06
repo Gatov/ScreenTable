@@ -21,10 +21,12 @@ public class PlayerController
     public Action<MapMessage> OnMessage;
 
     private DetectionStore _detectionStore;
-    public void SetDetectionOverlay(DetectionStore store)
+    private Func<bool> _showFigurines;
+    public void SetDetectionOverlay(DetectionStore store, Func<bool> showFigurines)
     {
         _detectionStore = store;
-        _playersMap?.SetDetectionOverlay(store);
+        _showFigurines = showFigurines;
+        _playersMap?.SetDetectionOverlay(store, showFigurines);
     }
 
     public void InvalidateSnapshot() => _snapshotDirty = true;
@@ -86,7 +88,7 @@ public class PlayerController
         _playersMap.OnMessage += Publish;
         _playersMap.OnRectUpdated += OnMapDirty;
         if (_detectionStore != null)
-            _playersMap.SetDetectionOverlay(_detectionStore);
+            _playersMap.SetDetectionOverlay(_detectionStore, _showFigurines);
     }
 
     private void OnMapDirty(RectangleF _) => _snapshotDirty = true;
