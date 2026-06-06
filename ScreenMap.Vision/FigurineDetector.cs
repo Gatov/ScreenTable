@@ -29,7 +29,6 @@ public sealed class FigurineDetector : IDisposable
     private Mat _thresh;
     private Mat _morphed;
     private Mat _colorDist; // per-pixel BGR diff-vector magnitude (CV_32FC1), reused each cycle.
-    private Mat _kernel;
 
     /// <summary>Min blob size in pixels — used only on the no-grid fallback (see
     /// <see cref="PixelsPerCell"/>).</summary>
@@ -181,10 +180,14 @@ public sealed class FigurineDetector : IDisposable
         // are) — those always differ between the rendered view and the warped camera frame.
         MaskAround(_thresh, refCenters.Values, 95);
 
-        if (_kernel == null || _kernel.IsDisposed)
-            _kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(5, 5));
+        // Apply a Closing operation to bridge gaps and connect fragmented reflections of a single figurine
+        using var closeKernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(15, 15));
         EnsureMat(ref _morphed, dstH, dstW, MatType.CV_8UC1);
-        Cv2.MorphologyEx(_thresh, _morphed, MorphTypes.Open, _kernel);
+        Cv2.MorphologyEx(_thresh, _morphed, MorphTypes.Close, closeKernel);
+
+        // Apply an Opening operation to remove small noise
+        using var openKernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(5, 5));
+        Cv2.MorphologyEx(_morphed, _morphed, MorphTypes.Open, openKernel);
 
         Cv2.FindContours(_morphed, out var contours, out _,
             RetrievalModes.External, ContourApproximationModes.ApproxSimple);
@@ -194,9 +197,12 @@ public sealed class FigurineDetector : IDisposable
         var candidates = new List<(FigurineDetection det, double rawRadius, double fill)>(contours.Length);
         foreach (var contour in contours)
         {
-            Cv2.MinEnclosingCircle(contour, out var center, out float radius);
+            // Apply Convex Hull to convert half-moon/crescent shadows into solid shapes
+            var hull = Cv2.ConvexHull(contour);
+
+            Cv2.MinEnclosingCircle(hull, out var center, out float radius);
             float rawRadius = radius;
-            double fill = radius > 0 ? Cv2.ContourArea(contour) / (Math.PI * radius * radius) : 0;
+            double fill = radius > 0 ? Cv2.ContourArea(hull) / (Math.PI * radius * radius) : 0;
             // Reject diffuse / smeared blobs that don't fill their enclosing circle — a solid
             // token does, glare and registration artifacts do not.
             if (MinFillRatio > 0 && fill < MinFillRatio) continue;
@@ -212,9 +218,8 @@ public sealed class FigurineDetector : IDisposable
                 // No grid: legacy pixel-area filter, raw (unsnapped) radius.
                 if (Cv2.ContourArea(contour) < MinBlobAreaPx) continue;
             }
-            // Score (computed ONLY for blobs that survived the size/fill gates above): color histogram shift
-            // (sum of Bhattacharyya distances across B, G, R channels).
-            float score = MeanColorHistogramShift(_playerMat, _warped, contour);
+            // Score: Distance between the average color of the reference and the average color of the camera frame
+            float score = MeanColorDistanceV2(_playerMat, _warped, hull);
             candidates.Add((new FigurineDetection(new PointF(center.X, center.Y), radius, score), rawRadius, fill));
         }
 
@@ -399,10 +404,10 @@ public sealed class FigurineDetector : IDisposable
     }
 
     /// <summary>
-    /// Computes the sum of Bhattacharyya distances across B, G, R histograms for the given contour.
-    /// Higher value means stronger shift/difference.
+    /// Computes the Euclidean distance between the average color of the reference map and the average color of the camera frame
+    /// within the given contour.
     /// </summary>
-    private static float MeanColorHistogramShift(Mat refMat, Mat warpedMat, OpenCvSharp.Point[] contour)
+    private static float MeanColorDistanceV2(Mat refMat, Mat warpedMat, OpenCvSharp.Point[] contour)
     {
         var rect = Cv2.BoundingRect(contour).Intersect(new Rect(0, 0, refMat.Cols, refMat.Rows));
         if (rect.Width <= 0 || rect.Height <= 0) return 0f;
@@ -416,37 +421,52 @@ public sealed class FigurineDetector : IDisposable
         using var refRoi = new Mat(refMat, rect);
         using var warpedRoi = new Mat(warpedMat, rect);
 
-        float totalShift = 0f;
-        int[] histSize = { 32 };
-        Rangef[] ranges = { new Rangef(0, 256) };
+        Scalar refMean = Cv2.Mean(refRoi, mask);
+        Scalar warpedMean = Cv2.Mean(warpedRoi, mask);
 
-        Mat[] refChannels = Cv2.Split(refRoi);
-        Mat[] warpedChannels = Cv2.Split(warpedRoi);
+        double db = refMean.Val0 - warpedMean.Val0;
+        double dg = refMean.Val1 - warpedMean.Val1;
+        double dr = refMean.Val2 - warpedMean.Val2;
+        float baseScore = (float)Math.Sqrt(db * db + dg * dg + dr * dr);
 
-        try
+        // Convert averages to HSV to check for glare
+        using var refMat1x1 = new Mat(1, 1, MatType.CV_8UC3);
+        refMat1x1.Set<Vec3b>(0, 0, new Vec3b((byte)refMean.Val0, (byte)refMean.Val1, (byte)refMean.Val2));
+        using var warpedMat1x1 = new Mat(1, 1, MatType.CV_8UC3);
+        warpedMat1x1.Set<Vec3b>(0, 0, new Vec3b((byte)warpedMean.Val0, (byte)warpedMean.Val1, (byte)warpedMean.Val2));
+
+        using var refHsv = new Mat();
+        using var warpedHsv = new Mat();
+        Cv2.CvtColor(refMat1x1, refHsv, ColorConversionCodes.BGR2HSV);
+        Cv2.CvtColor(warpedMat1x1, warpedHsv, ColorConversionCodes.BGR2HSV);
+
+        var refVec = refHsv.Get<Vec3b>(0, 0);
+        var warpedVec = warpedHsv.Get<Vec3b>(0, 0);
+
+        float hRef = refVec.Item0; // 0-180
+        float vRef = refVec.Item2; // 0-255
+
+        float hWarp = warpedVec.Item0;
+        float sWarp = warpedVec.Item1; // 0-255
+        float vWarp = warpedVec.Item2;
+
+        float hueDiff = Math.Min(Math.Abs(hWarp - hRef), 180 - Math.Abs(hWarp - hRef));
+
+        // If the blob is noticeably brighter than the map...
+        if (vWarp > vRef + 15)
         {
-            for (int c = 0; c < 3; c++)
+            // Only compare hue if both colors are somewhat saturated (otherwise hue is random noise)
+            if (sWarp > 30 && refHsv.Get<Vec3b>(0, 0).Item1 > 30)
             {
-                using var refHist = new Mat();
-                using var warpedHist = new Mat();
-
-                Cv2.CalcHist(new[] { refChannels[c] }, new[] { 0 }, mask, refHist, 1, histSize, ranges);
-                Cv2.CalcHist(new[] { warpedChannels[c] }, new[] { 0 }, mask, warpedHist, 1, histSize, ranges);
-
-                Cv2.Normalize(refHist, refHist, 0, 1, NormTypes.MinMax);
-                Cv2.Normalize(warpedHist, warpedHist, 0, 1, NormTypes.MinMax);
-
-                double dist = Cv2.CompareHist(refHist, warpedHist, HistCompMethods.Correl);
-                totalShift += (float)(1.0 - dist);
+                if (hueDiff < 25)
+                {
+                    // It's brighter and has a similar hue -> likely screen bloom or reflection
+                    baseScore -= 1000;
+                }
             }
         }
-        finally
-        {
-            foreach (var c in refChannels) c.Dispose();
-            foreach (var c in warpedChannels) c.Dispose();
-        }
 
-        return totalShift;
+        return baseScore;
     }
 
     public void Dispose()
@@ -461,6 +481,5 @@ public sealed class FigurineDetector : IDisposable
         _thresh?.Dispose();
         _morphed?.Dispose();
         _colorDist?.Dispose();
-        _kernel?.Dispose();
     }
 }
