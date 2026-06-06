@@ -255,6 +255,14 @@ public class FigurineDetectionTests
     }
 
     [Test]
+    public void SelectCount_Auto_TiedTopGroup_ThenWeaker_RespectsFloor()
+    {
+        // Top 5 identical (refGap == 0) so any later drop reads as a cliff -> cut at the floor of 5.
+        var scores = new float[] { 90, 90, 90, 90, 90, 80, 70, 60 };
+        Assert.That(FigurineDetector.SelectCount(scores, 0), Is.EqualTo(5));
+    }
+
+    [Test]
     public void ExpectedCount_CapsToStrongestByColorDistance()
     {
         using var view = RenderScene(960, 540);

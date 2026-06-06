@@ -28,6 +28,7 @@ public sealed class FigurineDetector : IDisposable
     private Mat _blur;
     private Mat _thresh;
     private Mat _morphed;
+    private Mat _colorDist; // per-pixel BGR diff-vector magnitude (CV_32FC1), reused each cycle.
     private Mat _kernel;
 
     /// <summary>Min blob size in pixels — used only on the no-grid fallback (see
@@ -143,6 +144,21 @@ public sealed class FigurineDetector : IDisposable
         Cv2.Max(_diff, channels[2], _diff);
         foreach (var c in channels) c.Dispose();
 
+        // Per-pixel color distance = sqrt(b²+g²+r²) of the BGR diff, reused by the blob scorer.
+        EnsureMat(ref _colorDist, dstH, dstW, MatType.CV_32FC1);
+        using (var diffF = new Mat())
+        {
+            _diffBgr.ConvertTo(diffF, MatType.CV_32FC3);
+            Mat[] dch = Cv2.Split(diffF);
+            try
+            {
+                _colorDist.SetTo(Scalar.All(0));
+                foreach (var c in dch) { using var c2 = c.Mul(c); Cv2.Add(_colorDist, c2, _colorDist); }
+                Cv2.Sqrt(_colorDist, _colorDist);
+            }
+            finally { foreach (var c in dch) c.Dispose(); }
+        }
+
         // Low-pass before diff: smooths out the high-frequency appearance differences
         // between a digital map and a photo of it (bloom, screen texture, sub-pixel
         // registration), while a solid object survives.
@@ -198,7 +214,7 @@ public sealed class FigurineDetector : IDisposable
             }
             // Score (computed ONLY for blobs that survived the size/fill gates above): mean color
             // distance — the magnitude of the per-pixel BGR difference vector inside the blob.
-            float score = MeanColorDistance(_diffBgr, contour);
+            float score = MeanColorDistance(_colorDist, contour);
             candidates.Add((new FigurineDetection(new PointF(center.X, center.Y), radius, score), rawRadius, fill));
         }
 
@@ -351,13 +367,13 @@ public sealed class FigurineDetector : IDisposable
         if (keep.Right < mask.Cols) Cv2.Rectangle(mask, new Rect(keep.Right, 0, mask.Cols - keep.Right, mask.Rows), Scalar.Black, -1);
     }
 
-    /// <summary>Mean over the contour's filled interior of the per-pixel BGR difference-vector
-    /// magnitude (sqrt(b²+g²+r²)). <paramref name="diffBgr"/> is the absdiff(map, warped) image
-    /// (unchanged since it was built in Detect). Higher means the blob differs more strongly — in
-    /// brightness AND hue — from the map.</summary>
-    private static float MeanColorDistance(Mat diffBgr, OpenCvSharp.Point[] contour)
+    /// <summary>Mean over the contour's filled interior of the precomputed per-pixel color-distance
+    /// magnitude (<paramref name="colorDist"/> is the CV_32FC1 sqrt(b²+g²+r²) of the BGR diff, built
+    /// once per cycle in Detect). Higher means the blob differs more strongly — brightness AND hue —
+    /// from the map.</summary>
+    private static float MeanColorDistance(Mat colorDist, OpenCvSharp.Point[] contour)
     {
-        var rect = Cv2.BoundingRect(contour).Intersect(new Rect(0, 0, diffBgr.Cols, diffBgr.Rows));
+        var rect = Cv2.BoundingRect(contour).Intersect(new Rect(0, 0, colorDist.Cols, colorDist.Rows));
         if (rect.Width <= 0 || rect.Height <= 0) return 0f;
 
         // Mask = the contour's filled interior, in ROI-local coordinates.
@@ -367,22 +383,8 @@ public sealed class FigurineDetector : IDisposable
             local[i] = new OpenCvSharp.Point(contour[i].X - rect.X, contour[i].Y - rect.Y);
         Cv2.FillPoly(mask, new[] { local }, Scalar.White);
 
-        // Per-pixel L2 norm across B,G,R -> single-channel float magnitude, then mean over the mask.
-        using var roi = new Mat(diffBgr, rect);
-        using var roiF = new Mat();
-        roi.ConvertTo(roiF, MatType.CV_32FC3);
-        Mat[] ch = Cv2.Split(roiF);
-        using var acc = new Mat(rect.Height, rect.Width, MatType.CV_32FC1, Scalar.All(0));
-        try
-        {
-            foreach (var c in ch) { using var c2 = c.Mul(c); Cv2.Add(acc, c2, acc); }
-        }
-        finally
-        {
-            foreach (var c in ch) c.Dispose();
-        }
-        Cv2.Sqrt(acc, acc);
-        return (float)Cv2.Mean(acc, mask).Val0;
+        using var roi = new Mat(colorDist, rect);
+        return (float)Cv2.Mean(roi, mask).Val0;
     }
 
     private static void MaskAround(Mat mask, System.Collections.Generic.IEnumerable<Point2f> centers, int half)
@@ -407,6 +409,7 @@ public sealed class FigurineDetector : IDisposable
         _blur?.Dispose();
         _thresh?.Dispose();
         _morphed?.Dispose();
+        _colorDist?.Dispose();
         _kernel?.Dispose();
     }
 }
