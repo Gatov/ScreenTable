@@ -52,6 +52,11 @@ public sealed class FigurineDetector : IDisposable
     /// so this rejects them. 0 disables the check.</summary>
     public double MinFillRatio { get; set; } = 0.35;
 
+    /// <summary>Expected number of figurines on the table. When &gt; 0 the detector keeps only
+    /// the <c>ExpectedCount</c> strongest blobs (by <see cref="FigurineDetection.Score"/>); when 0
+    /// it auto-guesses via <see cref="SelectCount"/>. Filters fakes/flares without recalibration.</summary>
+    public int ExpectedCount { get; set; }
+
     /// <summary>Grayscale diff above this counts as an object. Fixed (not Otsu) so map
     /// texture / screen-photo appearance noise stays below it while an object clears it.</summary>
     public int DiffThreshold { get; set; } = 70;
@@ -168,9 +173,9 @@ public sealed class FigurineDetector : IDisposable
         Cv2.FindContours(_morphed, out var contours, out _,
             RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
-        var list = new List<FigurineDetection>(contours.Length);
-        var rawRadii = new List<double>(contours.Length);
-        var fillRatios = new List<double>(contours.Length);
+        // Candidate carries everything we need to keep the per-detection arrays 1:1 after
+        // the score-ranked cap reorders them.
+        var candidates = new List<(FigurineDetection det, double rawRadius, double fill)>(contours.Length);
         foreach (var contour in contours)
         {
             Cv2.MinEnclosingCircle(contour, out var center, out float radius);
@@ -182,7 +187,7 @@ public sealed class FigurineDetector : IDisposable
             if (PixelsPerCell > 0)
             {
                 // Grid scale known. Object size is measured as DIAMETER in cells (a mini occupies
-                // ~one grid square == one cell across). Drop anything below the minimum diameter (sub-token noise).
+                // ~one grid square == one cell across). Drop anything outside the size band.
                 double cells = 2.0 * radius / PixelsPerCell;
                 if (cells < MinObjectCells || cells > MaxObjectCells) continue;
             }
@@ -191,9 +196,26 @@ public sealed class FigurineDetector : IDisposable
                 // No grid: legacy pixel-area filter, raw (unsnapped) radius.
                 if (Cv2.ContourArea(contour) < MinBlobAreaPx) continue;
             }
-            list.Add(new FigurineDetection(new PointF(center.X, center.Y), radius));
-            rawRadii.Add(rawRadius);
-            fillRatios.Add(fill);
+            // Score (computed ONLY for blobs that survived the size/fill gates above): mean color
+            // distance — the magnitude of the per-pixel BGR difference vector inside the blob.
+            float score = MeanColorDistance(_diffBgr, contour);
+            candidates.Add((new FigurineDetection(new PointF(center.X, center.Y), radius, score), rawRadius, fill));
+        }
+
+        // Rank by confidence and keep only the expected number (or the auto-guessed count).
+        candidates.Sort((a, b) => b.det.Score.CompareTo(a.det.Score));
+        var scores = new float[candidates.Count];
+        for (int i = 0; i < candidates.Count; i++) scores[i] = candidates[i].det.Score;
+        int keep = SelectCount(scores, ExpectedCount);
+
+        var list = new List<FigurineDetection>(keep);
+        var rawRadii = new List<double>(keep);
+        var fillRatios = new List<double>(keep);
+        for (int i = 0; i < keep; i++)
+        {
+            list.Add(candidates[i].det);
+            rawRadii.Add(candidates[i].rawRadius);
+            fillRatios.Add(candidates[i].fill);
         }
         detections = list.ToArray();
         LastRawRadii = rawRadii.ToArray();
@@ -327,6 +349,33 @@ public sealed class FigurineDetector : IDisposable
         if (keep.Bottom < mask.Rows) Cv2.Rectangle(mask, new Rect(0, keep.Bottom, mask.Cols, mask.Rows - keep.Bottom), Scalar.Black, -1);
         if (keep.Left > 0) Cv2.Rectangle(mask, new Rect(0, 0, keep.Left, mask.Rows), Scalar.Black, -1);
         if (keep.Right < mask.Cols) Cv2.Rectangle(mask, new Rect(keep.Right, 0, mask.Cols - keep.Right, mask.Rows), Scalar.Black, -1);
+    }
+
+    /// <summary>Mean over the contour's filled interior of the per-pixel BGR difference-vector
+    /// magnitude (sqrt(b²+g²+r²)). <paramref name="diffBgr"/> is the absdiff(map, warped) image
+    /// (unchanged since it was built in Detect). Higher means the blob differs more strongly — in
+    /// brightness AND hue — from the map.</summary>
+    private static float MeanColorDistance(Mat diffBgr, OpenCvSharp.Point[] contour)
+    {
+        var rect = Cv2.BoundingRect(contour).Intersect(new Rect(0, 0, diffBgr.Cols, diffBgr.Rows));
+        if (rect.Width <= 0 || rect.Height <= 0) return 0f;
+
+        // Mask = the contour's filled interior, in ROI-local coordinates.
+        using var mask = new Mat(rect.Height, rect.Width, MatType.CV_8UC1, Scalar.Black);
+        var local = new OpenCvSharp.Point[contour.Length];
+        for (int i = 0; i < contour.Length; i++)
+            local[i] = new OpenCvSharp.Point(contour[i].X - rect.X, contour[i].Y - rect.Y);
+        Cv2.FillPoly(mask, new[] { local }, Scalar.White);
+
+        // Per-pixel L2 norm across B,G,R -> single-channel float magnitude, then mean over the mask.
+        using var roi = new Mat(diffBgr, rect);
+        using var roiF = new Mat();
+        roi.ConvertTo(roiF, MatType.CV_32FC3);
+        Mat[] ch = Cv2.Split(roiF);
+        using var acc = new Mat(rect.Height, rect.Width, MatType.CV_32FC1, Scalar.All(0));
+        foreach (var c in ch) { using var c2 = c.Mul(c); Cv2.Add(acc, c2, acc); c.Dispose(); }
+        Cv2.Sqrt(acc, acc);
+        return (float)Cv2.Mean(acc, mask).Val0;
     }
 
     private static void MaskAround(Mat mask, System.Collections.Generic.IEnumerable<Point2f> centers, int half)

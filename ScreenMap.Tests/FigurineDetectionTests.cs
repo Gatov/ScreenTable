@@ -254,6 +254,43 @@ public class FigurineDetectionTests
         Assert.That(FigurineDetector.SelectCount(scores, 0), Is.EqualTo(8));
     }
 
+    [Test]
+    public void ExpectedCount_CapsToStrongestByColorDistance()
+    {
+        using var view = RenderScene(960, 540);
+        using var cameraBgra = BitmapConverter.ToMat(RenderScene(1280, 720));
+        using var camera = cameraBgra.CvtColor(ColorConversionCodes.BGRA2BGR);
+        Cv2.Add(camera, new Scalar(40, 40, 40), camera);
+        // Left: black disc (differs from grey in brightness only).
+        Cv2.Circle(camera, new OpenCvSharp.Point(280, 360), 26, new Scalar(0, 0, 0), -1);
+        // Right: pure-blue disc (differs strongly in one channel -> larger color distance).
+        Cv2.Circle(camera, new OpenCvSharp.Point(680, 360), 26, new Scalar(255, 0, 0), -1);
+
+        using var detector = new FigurineDetector { MinBlobAreaPx = 200, ExpectedCount = 1 };
+        var status = detector.Detect(camera, view, out var dets);
+
+        Assert.That(status, Is.EqualTo(DetectStatus.Ok));
+        Assert.That(dets.Length, Is.EqualTo(1), "cap keeps exactly one");
+        Assert.That(dets[0].Center.X, Is.GreaterThan(view.Width / 2f),
+            "the higher color-distance (blue) disc on the right is kept");
+    }
+
+    [Test]
+    public void ExpectedCount_Zero_KeepsAllBelowFloor()
+    {
+        using var view = RenderScene(960, 540);
+        using var cameraBgra = BitmapConverter.ToMat(RenderScene(1280, 720));
+        using var camera = cameraBgra.CvtColor(ColorConversionCodes.BGRA2BGR);
+        Cv2.Add(camera, new Scalar(40, 40, 40), camera);
+        Cv2.Circle(camera, new OpenCvSharp.Point(280, 360), 26, new Scalar(0, 0, 0), -1);
+        Cv2.Circle(camera, new OpenCvSharp.Point(680, 360), 26, new Scalar(255, 0, 0), -1);
+
+        using var detector = new FigurineDetector { MinBlobAreaPx = 200, ExpectedCount = 0 };
+        detector.Detect(camera, view, out var dets);
+
+        Assert.That(dets.Length, Is.EqualTo(2), "auto with 2 < floor(5) keeps all");
+    }
+
     private static (Mat frame, Bitmap view) LoadCapture(string stamp)
     {
         string dir = System.IO.Path.Combine(TestContext.CurrentContext.TestDirectory,
