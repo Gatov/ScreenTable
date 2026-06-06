@@ -40,7 +40,11 @@ and the warped camera frame inside each blob.
 
 - Add `float Score { get; }` to the `FigurineDetection` struct (constructor gains a
   `score` parameter; existing callers pass it).
-- In `FigurineDetector.Detect`, for each contour that passes the hard gates: build a
+- The existing size/fill hard gates (`MinFillRatio`, `MinObjectCells`/`MaxObjectCells`,
+  or the no-grid `MinBlobAreaPx`) run **first and unchanged** — too-small and too-big
+  blobs are dropped *before* any score is computed. The score is calculated only for
+  contours that survive those gates.
+- In `FigurineDetector.Detect`, for each surviving contour: build a
   single-channel mask of the contour, and compute the **mean** over masked pixels of the
   per-pixel BGR difference-vector magnitude `sqrt(b² + g² + r²)`, sampled from the
   existing `_diffBgr` (already `Absdiff(player, warped)` per channel). This is the
