@@ -1,3 +1,4 @@
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using NUnit.Framework;
@@ -232,11 +233,25 @@ public class FigurineDetectionTests
     }
 
     [Test]
-    public void SelectCount_Auto_ClusterOfFiveThenCliff_RespectsFloor()
+    public void SelectCount_Auto_CliffExactlyAtFloorBoundary_KeepsFive()
     {
-        // tight top 5, then a sharp drop exactly at index 5 -> floor and cliff agree on 5.
+        // cliff fires at i==floor, so the cut is 5 regardless of the floor guard
         var scores = new float[] { 100, 99, 98, 97, 96, 40, 39, 38, 37 };
         Assert.That(FigurineDetector.SelectCount(scores, 0), Is.EqualTo(5));
+    }
+
+    [Test]
+    public void SelectCount_EmptyInput_ReturnsZero()
+    {
+        Assert.That(FigurineDetector.SelectCount(Array.Empty<float>(), 0), Is.EqualTo(0));
+        Assert.That(FigurineDetector.SelectCount(Array.Empty<float>(), 3), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void SelectCount_Auto_UniformScores_ReturnsAll()
+    {
+        var scores = new float[] { 50, 50, 50, 50, 50, 50, 50, 50 };
+        Assert.That(FigurineDetector.SelectCount(scores, 0), Is.EqualTo(8));
     }
 
     private static (Mat frame, Bitmap view) LoadCapture(string stamp)

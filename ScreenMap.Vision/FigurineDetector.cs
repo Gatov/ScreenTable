@@ -206,8 +206,8 @@ public sealed class FigurineDetector : IDisposable
     }
 
     /// <summary>Decides how many of the score-sorted (descending) blobs to keep.
-    /// <paramref name="expected"/> &gt; 0 keeps the top N. <paramref name="expected"/> == 0
-    /// auto-guesses: keep at least <c>Floor</c> and at most <c>Ceiling</c>, cutting at the first
+    /// <paramref name="expected"/> &gt; 0 keeps the top N; any other value (0 or negative) auto-guesses.
+    /// Auto mode: keep at least <c>Floor</c> and at most <c>Ceiling</c>, cutting at the first
     /// score drop that is sharply larger (&gt; <c>CliffFactor</c>x) than the typical drop across
     /// the top <c>Floor</c>. Pure and OpenCV-free so it is unit-testable.</summary>
     public static int SelectCount(IReadOnlyList<float> scoresDesc, int expected)
