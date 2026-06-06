@@ -194,6 +194,51 @@ public class FigurineDetectionTests
         }
     }
 
+    [Test]
+    public void SelectCount_ManualN_KeepsTopN()
+    {
+        var scores = new float[] { 100, 90, 80, 70, 60, 50, 40, 30, 20, 10 };
+        Assert.That(FigurineDetector.SelectCount(scores, 3), Is.EqualTo(3));
+    }
+
+    [Test]
+    public void SelectCount_ManualN_AboveCount_KeepsAll()
+    {
+        var scores = new float[] { 100, 50 };
+        Assert.That(FigurineDetector.SelectCount(scores, 5), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void SelectCount_Auto_BelowFloor_KeepsAll()
+    {
+        var scores = new float[] { 100, 90, 70 };           // 3 < floor(5)
+        Assert.That(FigurineDetector.SelectCount(scores, 0), Is.EqualTo(3));
+    }
+
+    [Test]
+    public void SelectCount_Auto_SmoothDescent_KeepsCeiling()
+    {
+        var scores = new float[25];
+        for (int i = 0; i < scores.Length; i++) scores[i] = 100 - i; // gentle, no cliff
+        Assert.That(FigurineDetector.SelectCount(scores, 0), Is.EqualTo(20)); // ceiling
+    }
+
+    [Test]
+    public void SelectCount_Auto_CliffAfterEight_CutsAtCliff()
+    {
+        // top group of 8 with ~1.0 gaps, then a 43-point cliff.
+        var scores = new float[] { 100, 99, 98, 97, 96, 95, 94, 93, 50, 49, 48, 47 };
+        Assert.That(FigurineDetector.SelectCount(scores, 0), Is.EqualTo(8));
+    }
+
+    [Test]
+    public void SelectCount_Auto_ClusterOfFiveThenCliff_RespectsFloor()
+    {
+        // tight top 5, then a sharp drop exactly at index 5 -> floor and cliff agree on 5.
+        var scores = new float[] { 100, 99, 98, 97, 96, 40, 39, 38, 37 };
+        Assert.That(FigurineDetector.SelectCount(scores, 0), Is.EqualTo(5));
+    }
+
     private static (Mat frame, Bitmap view) LoadCapture(string stamp)
     {
         string dir = System.IO.Path.Combine(TestContext.CurrentContext.TestDirectory,

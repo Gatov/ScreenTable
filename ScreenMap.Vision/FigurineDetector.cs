@@ -205,6 +205,35 @@ public sealed class FigurineDetector : IDisposable
         return DetectStatus.Ok;
     }
 
+    /// <summary>Decides how many of the score-sorted (descending) blobs to keep.
+    /// <paramref name="expected"/> &gt; 0 keeps the top N. <paramref name="expected"/> == 0
+    /// auto-guesses: keep at least <c>Floor</c> and at most <c>Ceiling</c>, cutting at the first
+    /// score drop that is sharply larger (&gt; <c>CliffFactor</c>x) than the typical drop across
+    /// the top <c>Floor</c>. Pure and OpenCV-free so it is unit-testable.</summary>
+    public static int SelectCount(IReadOnlyList<float> scoresDesc, int expected)
+    {
+        const int floor = 5, ceiling = 20;
+        const float cliffFactor = 2.5f;
+
+        int n = scoresDesc.Count;
+        if (n == 0) return 0;
+        if (expected > 0) return Math.Min(expected, n);
+        if (n <= floor) return n;
+
+        // Typical consecutive drop across the assumed-real top group.
+        float sumDrop = 0;
+        for (int i = 1; i < floor; i++) sumDrop += scoresDesc[i - 1] - scoresDesc[i];
+        float refGap = sumDrop / (floor - 1);
+
+        int max = Math.Min(ceiling, n);
+        for (int i = floor; i < max; i++)
+        {
+            float drop = scoresDesc[i - 1] - scoresDesc[i];
+            if (drop > cliffFactor * refGap) return i; // cliff: keep the i blobs above it.
+        }
+        return max; // no cliff found within the window -> ceiling (or all, if fewer).
+    }
+
     /// <summary>Cuts each detection out of the aligned frame as a circular-masked crop.
     /// Detections are in the warped/reference coordinate space, so they index <see cref="_warped"/>
     /// directly.</summary>
