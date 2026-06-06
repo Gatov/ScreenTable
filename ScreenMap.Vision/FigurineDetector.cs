@@ -51,7 +51,7 @@ public sealed class FigurineDetector : IDisposable
     /// <summary>Minimum fill ratio (contour area / enclosing-circle area). A real token is a solid
     /// disc (~0.5–1.0); diffuse glare and registration smears fill their enclosing circle poorly,
     /// so this rejects them. 0 disables the check.</summary>
-    public double MinFillRatio { get; set; } = 0.35;
+    public double MinFillRatio { get; set; } = 0;
 
     /// <summary>Expected number of figurines on the table. When &gt; 0 the detector keeps only
     /// the <c>ExpectedCount</c> strongest blobs (by <see cref="FigurineDetection.Score"/>); when 0
@@ -212,9 +212,9 @@ public sealed class FigurineDetector : IDisposable
                 // No grid: legacy pixel-area filter, raw (unsnapped) radius.
                 if (Cv2.ContourArea(contour) < MinBlobAreaPx) continue;
             }
-            // Score (computed ONLY for blobs that survived the size/fill gates above): mean color
-            // distance — the magnitude of the per-pixel BGR difference vector inside the blob.
-            float score = MeanColorDistance(_colorDist, contour);
+            // Score (computed ONLY for blobs that survived the size/fill gates above): color histogram shift
+            // (sum of Bhattacharyya distances across B, G, R channels).
+            float score = MeanColorHistogramShift(_playerMat, _warped, contour);
             candidates.Add((new FigurineDetection(new PointF(center.X, center.Y), radius, score), rawRadius, fill));
         }
 
@@ -396,6 +396,57 @@ public sealed class FigurineDetector : IDisposable
             var rect = new Rect(x, y, half * 2, half * 2).Intersect(new Rect(0, 0, mask.Cols, mask.Rows));
             if (rect.Width > 0 && rect.Height > 0) Cv2.Rectangle(mask, rect, black, -1);
         }
+    }
+
+    /// <summary>
+    /// Computes the sum of Bhattacharyya distances across B, G, R histograms for the given contour.
+    /// Higher value means stronger shift/difference.
+    /// </summary>
+    private static float MeanColorHistogramShift(Mat refMat, Mat warpedMat, OpenCvSharp.Point[] contour)
+    {
+        var rect = Cv2.BoundingRect(contour).Intersect(new Rect(0, 0, refMat.Cols, refMat.Rows));
+        if (rect.Width <= 0 || rect.Height <= 0) return 0f;
+
+        using var mask = new Mat(rect.Height, rect.Width, MatType.CV_8UC1, Scalar.Black);
+        var local = new OpenCvSharp.Point[contour.Length];
+        for (int i = 0; i < contour.Length; i++)
+            local[i] = new OpenCvSharp.Point(contour[i].X - rect.X, contour[i].Y - rect.Y);
+        Cv2.FillPoly(mask, new[] { local }, Scalar.White);
+
+        using var refRoi = new Mat(refMat, rect);
+        using var warpedRoi = new Mat(warpedMat, rect);
+
+        float totalShift = 0f;
+        int[] histSize = { 32 };
+        Rangef[] ranges = { new Rangef(0, 256) };
+
+        Mat[] refChannels = Cv2.Split(refRoi);
+        Mat[] warpedChannels = Cv2.Split(warpedRoi);
+
+        try
+        {
+            for (int c = 0; c < 3; c++)
+            {
+                using var refHist = new Mat();
+                using var warpedHist = new Mat();
+
+                Cv2.CalcHist(new[] { refChannels[c] }, new[] { 0 }, mask, refHist, 1, histSize, ranges);
+                Cv2.CalcHist(new[] { warpedChannels[c] }, new[] { 0 }, mask, warpedHist, 1, histSize, ranges);
+
+                Cv2.Normalize(refHist, refHist, 0, 1, NormTypes.MinMax);
+                Cv2.Normalize(warpedHist, warpedHist, 0, 1, NormTypes.MinMax);
+
+                double dist = Cv2.CompareHist(refHist, warpedHist, HistCompMethods.Correl);
+                totalShift += (float)(1.0 - dist);
+            }
+        }
+        finally
+        {
+            foreach (var c in refChannels) c.Dispose();
+            foreach (var c in warpedChannels) c.Dispose();
+        }
+
+        return totalShift;
     }
 
     public void Dispose()
