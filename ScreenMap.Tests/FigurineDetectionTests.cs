@@ -264,6 +264,8 @@ public class FigurineDetectionTests
         // Left: black disc (differs from grey in brightness only).
         Cv2.Circle(camera, new OpenCvSharp.Point(280, 360), 26, new Scalar(0, 0, 0), -1);
         // Right: pure-blue disc (differs strongly in one channel -> larger color distance).
+        // After brightness normalization the blue disc's diff vs the grey (80,80,80) map is
+        // ~(135,80,80) -> dist ~178, vs the black disc's ~(80,80,80) -> dist ~139, so blue wins.
         Cv2.Circle(camera, new OpenCvSharp.Point(680, 360), 26, new Scalar(255, 0, 0), -1);
 
         using var detector = new FigurineDetector { MinBlobAreaPx = 200, ExpectedCount = 1 };
@@ -286,8 +288,9 @@ public class FigurineDetectionTests
         Cv2.Circle(camera, new OpenCvSharp.Point(680, 360), 26, new Scalar(255, 0, 0), -1);
 
         using var detector = new FigurineDetector { MinBlobAreaPx = 200, ExpectedCount = 0 };
-        detector.Detect(camera, view, out var dets);
+        var status = detector.Detect(camera, view, out var dets);
 
+        Assert.That(status, Is.EqualTo(DetectStatus.Ok));
         Assert.That(dets.Length, Is.EqualTo(2), "auto with 2 < floor(5) keeps all");
     }
 

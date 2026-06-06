@@ -373,7 +373,14 @@ public sealed class FigurineDetector : IDisposable
         roi.ConvertTo(roiF, MatType.CV_32FC3);
         Mat[] ch = Cv2.Split(roiF);
         using var acc = new Mat(rect.Height, rect.Width, MatType.CV_32FC1, Scalar.All(0));
-        foreach (var c in ch) { using var c2 = c.Mul(c); Cv2.Add(acc, c2, acc); c.Dispose(); }
+        try
+        {
+            foreach (var c in ch) { using var c2 = c.Mul(c); Cv2.Add(acc, c2, acc); }
+        }
+        finally
+        {
+            foreach (var c in ch) c.Dispose();
+        }
         Cv2.Sqrt(acc, acc);
         return (float)Cv2.Mean(acc, mask).Val0;
     }
