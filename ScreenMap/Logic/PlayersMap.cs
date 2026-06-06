@@ -254,6 +254,28 @@ public class PlayersMap : IDisposable
         return LiveViewRect(size);
     }
 
+    /// <summary>Detection-space pixels for one grid cell (one 2.5 cm token) in a snapshot of the
+    /// given size — i.e. CellSize scaled by the snapshot's zoom. Returns 0 when no map/grid, so the
+    /// detector falls back to pixel-area sizing. Averages the two axes (they differ only under
+    /// anisotropic DPI).</summary>
+    public float PixelsPerCell(Size snapshotSize)
+    {
+        var (x, y) = PixelsPerCellXY(snapshotSize);
+        return (x + y) / 2f;
+    }
+
+    /// <summary>TEMP DIAGNOSTIC: per-axis pixels-per-cell. They diverge when the snapshot aspect
+    /// differs from the live player-view aspect (the snapshot then renders cells non-square).</summary>
+    public (float x, float y) PixelsPerCellXY(Size snapshotSize)
+    {
+        if (_playersImage == null || _mapInfo.CellSize <= 0) return (0f, 0f);
+        var worldRect = LiveViewRect(snapshotSize);
+        if (worldRect.Width <= 0 || worldRect.Height <= 0) return (0f, 0f);
+        float zx = snapshotSize.Width / worldRect.Width;
+        float zy = snapshotSize.Height / worldRect.Height;
+        return (zx * _mapInfo.CellSize, zy * _mapInfo.CellSize);
+    }
+
     public void SetGridVisible(bool show)
     {
         _showGrid = show;

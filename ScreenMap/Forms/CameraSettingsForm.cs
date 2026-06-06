@@ -77,7 +77,7 @@ public class CameraSettingsForm : Form
         Controls.Add(_thresholdSlider);
         UpdateThresholdLabel();
 
-        // Smallest blob that counts as an object — filters out tiny specks.
+        // Smallest object that counts, in grid cells (one cell = one 2.5 cm token).
         y += 70;
         _minSizeLabel = new Label { Location = new Point(12, y + 3), AutoSize = true };
         Controls.Add(_minSizeLabel);
@@ -85,12 +85,12 @@ public class CameraSettingsForm : Form
         {
             Location = new Point(12, y + 22),
             Width = 334,
-            Minimum = 200,
-            Maximum = 5000,
-            SmallChange = 100,
-            LargeChange = 500,
-            TickFrequency = 400,
-            Value = Math.Clamp(settings.MinBlobAreaPx, 200, 5000)
+            Minimum = 1,
+            Maximum = 6,
+            SmallChange = 1,
+            LargeChange = 1,
+            TickFrequency = 1,
+            Value = Math.Clamp((int)Math.Round(settings.MinObjectCells), 1, 6)
         };
         _minSizeSlider.ValueChanged += (_, _) => UpdateMinSizeLabel();
         Controls.Add(_minSizeSlider);
@@ -150,7 +150,7 @@ public class CameraSettingsForm : Form
             _settings.DeviceIndex = _deviceCombo.SelectedItem is int di ? di : 0;
             _settings.IntervalSeconds = _intervalSlider.Value / 10.0;
             _settings.DiffThreshold = _thresholdSlider.Value;
-            _settings.MinBlobAreaPx = _minSizeSlider.Value;
+            _settings.MinObjectCells = _minSizeSlider.Value;
             _settings.Enabled = _enabledCheck.Checked;
             _settings.ShowOnGmView = _showGmCheck.Checked;
             _settings.ShowFigurines = _showFiguresCheck.Checked;
@@ -172,7 +172,8 @@ public class CameraSettingsForm : Form
 
     private void UpdateMinSizeLabel()
     {
-        _minSizeLabel.Text = $"Min object size: {_minSizeSlider.Value} px";
+        int cells = _minSizeSlider.Value;
+        _minSizeLabel.Text = $"Min object size: {cells} cell{(cells == 1 ? "" : "s")} (one cell = 2.5 cm)";
     }
 
     private void PopulateDevices()

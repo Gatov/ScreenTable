@@ -88,7 +88,8 @@ namespace ScreenMap
                 // or its circles become diffs and feed back as more false detections.
                 size => SafeInvoke(() => _controller.RenderSnapshotBitmap(size, includeDetections: false)),
                 size => SafeInvoke(() => _controller.GetSnapshotViewRect(size)),
-                CameraSnapshotSize);
+                CameraSnapshotSize,
+                size => SafeInvoke(() => _controller.GetPixelsPerCell(size)));
             _detectionService.DetectionsUpdated += OnDetectionsUpdated;
             _detectionService.Apply(_cameraSettings);
             UpdateCameraStatus();
@@ -115,7 +116,9 @@ namespace ScreenMap
         {
             var s = _detectionStore.Status;
             var text = _detectionStore.StatusText;
-            barStaticItemCameraStatus.Caption = $"Camera: {text}";
+            // TEMP DIAGNOSTIC: show per-axis pixels-per-cell for the detection snapshot.
+            var (ppx, ppy) = _controller.GetPixelsPerCellXY(CameraSnapshotSize);
+            barStaticItemCameraStatus.Caption = $"Camera: {text} | ppcXY={ppx:0}/{ppy:0}";
         }
 
         private void barButtonItemCamera_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)

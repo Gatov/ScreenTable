@@ -63,13 +63,17 @@ New public members:
 - `double MinObjectCells { get; set; } = 1.0` — smallest object kept / drawn, in cells.
 - `MinBlobAreaPx` is retained as the **no-grid fallback only**.
 
+Object size is measured as **diameter in cells** — a mini occupies roughly one grid square, i.e.
+one cell *across* (its radius is ~half a cell). This was confirmed against a real capture: the
+token's blob radius (~32 px) was ~0.9 cell in *diameter* against a 71 px/cell grid.
+
 Blob handling at the end of `Detect`:
 
 - When `PixelsPerCell > 0`:
   - For each contour, compute `radiusPx` (`MinEnclosingCircle`) and
-    `cells = (int)Math.Round(radiusPx / PixelsPerCell)`.
+    `cells = (int)Math.Round(2 * radiusPx / PixelsPerCell)` (diameter in cells).
   - **Reject** the blob if `cells < MinObjectCells` (noise / sub-token).
-  - Otherwise emit the detection with radius = `cells * PixelsPerCell` — a whole-cell circle.
+  - Otherwise emit the detection with radius = `cells * PixelsPerCell / 2` — a whole-cell-diameter circle.
   - Snapping happens in detection space, before `TranslateToUnscaled`, so the "N cells" size is
     resolution-independent across the player screen, GM view, and web view.
 - When `PixelsPerCell <= 0`:
@@ -83,8 +87,8 @@ Crops (`CropDetections`) continue to use the (now snapped) radius unchanged.
 - `CameraSettings`: add `double MinObjectCells { get; set; } = 1.0`. Keep `MinBlobAreaPx` for the
   fallback path. `DetectionService.Apply` sets both `_detector.MinObjectCells` and
   `_detector.MinBlobAreaPx` from settings.
-- `CameraSettingsForm`: the min-size slider becomes **"Min object size: N cells"**, integer range
-  **1–6**, bound to `MinObjectCells`. The sensitivity slider (`DiffThreshold`) is unchanged.
+- `CameraSettingsForm`: the min-size slider becomes **"Min object size: N cells"** (N = diameter
+  in cells), integer range **1–6**, bound to `MinObjectCells`. Sensitivity slider unchanged.
 
 ### 4. Auto-adjust algorithm (`ScreenMap.Vision/AutoTuner.cs`)
 
@@ -108,7 +112,7 @@ public sealed class AutoTuneResult
     public double MinObjectCells;
     public int MinBlobAreaPx;     // set only on the no-grid fallback
     public int BlobCount;         // blobs at the chosen threshold
-    public double TokenRadiusCells;
+    public double TokenDiameterCells;
     public string Message;
 }
 ```
@@ -124,15 +128,15 @@ public sealed class AutoTuneResult
 
 `SelectThreshold` (best-effort — always returns a recommendation unless aborted):
 
-- Expected token radius = `pixelsPerCell` (one cell). Define a blob as "the token" when its
-  `round(radiusPx / pixelsPerCell) == 1`.
+- A blob counts as "the token" when its **diameter** `round(2 * radiusPx / pixelsPerCell) >= 1`
+  (one cell across; sub-cell blobs are noise).
 - For each threshold count blobs and find whether exactly one token-sized blob is present.
 - **Prefer the center threshold of the longest consecutive run** where exactly one token-sized
   blob exists (most robust plateau).
 - If no threshold yields exactly one token-sized blob, fall back to the threshold with the
-  fewest blobs, tie-broken by the blob radius closest to one cell.
-- Output: `DiffThreshold` = chosen; `MinObjectCells` = snapped cells of the chosen token
-  (normally 1); `TokenRadiusCells` for the message; `BlobCount` at that threshold.
+  fewest blobs, tie-broken by the blob closest to one cell in diameter.
+- Output: `DiffThreshold` = chosen; `MinObjectCells` = the chosen token's measured diameter in
+  cells (normally 1); `TokenDiameterCells` for the message; `BlobCount` at that threshold.
 - When `pixelsPerCell <= 0` (no grid), fall back to area mode: pick the single-blob plateau and
   set `MinBlobAreaPx = clamp(round(tokenAreaPx * 0.5), 200, 5000)`; leave `MinObjectCells` unset.
 

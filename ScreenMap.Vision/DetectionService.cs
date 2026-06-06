@@ -9,6 +9,7 @@ public sealed class DetectionService : IDisposable
 {
     private readonly Func<Size, Bitmap> _renderPlayerView;
     private readonly Func<Size, RectangleF> _getViewRect;
+    private readonly Func<Size, float> _getPixelsPerCell;
     private readonly Size _playerViewSize;
     private readonly DetectionStore _store;
     private readonly FigurineDetector _detector = new();
@@ -49,11 +50,13 @@ public sealed class DetectionService : IDisposable
     public Bitmap RenderReferenceView() => _renderPlayerView?.Invoke(_playerViewSize);
 
     public DetectionService(DetectionStore store, Func<Size, Bitmap> renderPlayerView,
-        Func<Size, RectangleF> getViewRect, Size playerViewSize)
+        Func<Size, RectangleF> getViewRect, Size playerViewSize,
+        Func<Size, float> getPixelsPerCell = null)
     {
         _store = store;
         _renderPlayerView = renderPlayerView;
         _getViewRect = getViewRect;
+        _getPixelsPerCell = getPixelsPerCell;
         _playerViewSize = playerViewSize;
     }
 
@@ -62,9 +65,45 @@ public sealed class DetectionService : IDisposable
     {
         _settings = settings;
         _detector.MinBlobAreaPx = settings.MinBlobAreaPx;
+        _detector.MinObjectCells = settings.MinObjectCells;
         _detector.DiffThreshold = settings.DiffThreshold;
         ReconcileCamera();
         DetectionsUpdated?.Invoke();
+    }
+
+    /// <summary>
+    /// Runs the auto-adjust sweep against the latest camera frame: the user has placed a single
+    /// minimal-size (one-cell) token on the map. Finds the sensitivity (and min size) that
+    /// isolates it, writes the result into the shared settings, applies it to the live detector,
+    /// and persists. Returns the outcome for the caller to display. Call on the UI thread.
+    /// </summary>
+    public AutoTuneResult AutoTune()
+    {
+        if (_settings == null)
+            return new AutoTuneResult { Success = false, Message = "camera not configured yet" };
+        if (!TryGetLatestFrame(out var frame))
+            return new AutoTuneResult { Success = false, Message = "no camera frame — open the preview first" };
+
+        using (frame)
+        using (var view = RenderReferenceView())
+        {
+            if (view == null)
+                return new AutoTuneResult { Success = false, Message = "no map loaded" };
+
+            float ppc = _getPixelsPerCell?.Invoke(_playerViewSize) ?? 0f;
+            var result = new AutoTuner().Tune(frame, view, ppc);
+            if (!result.Success) return result;
+
+            _settings.DiffThreshold = result.DiffThreshold;
+            if (result.MinObjectCells > 0) _settings.MinObjectCells = result.MinObjectCells;
+            else _settings.MinBlobAreaPx = result.MinBlobAreaPx;
+            _detector.DiffThreshold = _settings.DiffThreshold;
+            _detector.MinObjectCells = _settings.MinObjectCells;
+            _detector.MinBlobAreaPx = _settings.MinBlobAreaPx;
+            _settings.Save();
+            DetectionsUpdated?.Invoke();
+            return result;
+        }
     }
 
     /// <summary>
@@ -245,6 +284,8 @@ public sealed class DetectionService : IDisposable
             return;
         }
         var viewRect = _getViewRect(_playerViewSize);
+        // Grid scale (px per 2.5 cm cell) for whole-cell radius snapping; 0 disables it.
+        _detector.PixelsPerCell = _getPixelsPerCell?.Invoke(_playerViewSize) ?? 0f;
         // Crops are produced when the overlay will draw them (ShowFigurines) or the preview
         // window is showing its own crop montage.
         _detector.ProduceCrops = _previewActive || (settings.ShowFigurines);
@@ -259,7 +300,8 @@ public sealed class DetectionService : IDisposable
                     PublishCrops(_detector.LastCrops);            // Mats for the preview window
                     cropBmps = BuildCropBitmaps(_detector.LastCrops); // Bitmaps for the map overlay
                 }
-                _store.Update(translated, cropBmps, DetectionStatus.Ok, $"ok ({translated.Length})");
+                _store.Update(translated, cropBmps, DetectionStatus.Ok,
+                    $"ok ({translated.Length}){DiagString()}");
                 break;
             case DetectStatus.NoMarkers:
                 _store.SetStatus(DetectionStatus.NoMarkers, "no markers");
@@ -268,6 +310,23 @@ public sealed class DetectionService : IDisposable
                 _store.SetStatus(DetectionStatus.Error, "empty frame");
                 break;
         }
+    }
+
+    // TEMP DIAGNOSTIC: " ppc=NN raw=[Rpx=C.Cc,...]" — raw blob radius (px) and its size in cells
+    // (raw / ppc) for the last detection, so an over-measured token shows up in the status bar.
+    private string DiagString()
+    {
+        float ppc = _detector.PixelsPerCell;
+        var raw = _detector.LastRawRadii;
+        if (ppc <= 0 || raw.Length == 0) return ppc > 0 ? $" ppc={ppc:0}" : "";
+        var sb = new System.Text.StringBuilder($" ppc={ppc:0} raw=[");
+        for (int i = 0; i < raw.Length; i++)
+        {
+            if (i > 0) sb.Append(',');
+            sb.Append($"{raw[i]:0}px={raw[i] / ppc:0.0}c");
+        }
+        sb.Append(']');
+        return sb.ToString();
     }
 
     private static FigurineDetection[] TranslateToUnscaled(FigurineDetection[] dets, RectangleF view, Size size)

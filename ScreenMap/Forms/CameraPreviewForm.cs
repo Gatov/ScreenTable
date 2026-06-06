@@ -19,6 +19,7 @@ public sealed class CameraPreviewForm : Form
     private readonly DetectionService _service;
     private readonly PictureBox _picture;
     private readonly CheckBox _showCrops;
+    private readonly Button _autoAdjust;
     private readonly System.Windows.Forms.Timer _uiTimer;
     private readonly Dictionary _dict = CvAruco.GetPredefinedDictionary(ArucoMarkers.DictName);
     private readonly DetectorParameters _params = ArucoMarkers.CreateDetectorParameters();
@@ -53,6 +54,20 @@ public sealed class CameraPreviewForm : Form
             ForeColor = Color.White
         };
         Controls.Add(_showCrops);
+
+        // Docked above the checkbox (reverse z-order): place one minimal token, then find the
+        // sensitivity/size that isolates it.
+        _autoAdjust = new Button
+        {
+            Dock = DockStyle.Top,
+            Text = "Auto-adjust detection",
+            Height = 30,
+            BackColor = Color.FromArgb(48, 48, 48),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat
+        };
+        _autoAdjust.Click += OnAutoAdjustClick;
+        Controls.Add(_autoAdjust);
 
         _uiTimer = new System.Windows.Forms.Timer { Interval = 66 }; // ~15 fps
         _uiTimer.Tick += OnUiTick;
@@ -146,6 +161,34 @@ public sealed class CameraPreviewForm : Form
             }
         }
         return canvas;
+    }
+
+    private void OnAutoAdjustClick(object sender, EventArgs e)
+    {
+        var prompt = MessageBox.Show(this,
+            "Place ONE token (the smallest you use) on the map and clear everything else, " +
+            "then click OK.\n\nAuto-adjust will find the sensitivity and minimum size that " +
+            "isolate just that token.",
+            "Auto-adjust detection", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
+        if (prompt != DialogResult.OK) return;
+
+        _autoAdjust.Enabled = false;
+        Cursor = Cursors.WaitCursor;
+        try
+        {
+            var result = _service.AutoTune();
+            Text = result.Success
+                ? "Camera Preview — auto-adjust: " + result.Message
+                : "Camera Preview — auto-adjust failed: " + result.Message;
+            if (!result.Success)
+                MessageBox.Show(this, result.Message, "Auto-adjust",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+            _autoAdjust.Enabled = true;
+        }
     }
 
     private void SaveDiagnostic(Mat raw)

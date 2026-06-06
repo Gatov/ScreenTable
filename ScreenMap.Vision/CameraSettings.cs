@@ -13,7 +13,11 @@ public class CameraSettings
     /// <summary>When true the detection overlay draws the isolated figurine photo at each
     /// detected location; when false it falls back to the plain green circle marker.</summary>
     public bool ShowFigurines { get; set; } = true;
+    /// <summary>No-grid fallback min blob size, in pixels (used when the grid scale is unknown).</summary>
     public int MinBlobAreaPx { get; set; } = 800;
+    /// <summary>Smallest object kept and drawn, in grid cells (1 cell = 2.5 cm). Used when the
+    /// map grid scale is known; auto-adjust sets this to the placed token's size.</summary>
+    public double MinObjectCells { get; set; } = 1.0;
     public int DiffThreshold { get; set; } = 70;
 
     private static string SettingsPath =>

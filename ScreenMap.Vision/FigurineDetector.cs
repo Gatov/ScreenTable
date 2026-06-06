@@ -31,7 +31,18 @@ public sealed class FigurineDetector : IDisposable
     private Mat _morphed;
     private Mat _kernel;
 
+    /// <summary>Min blob size in pixels — used only on the no-grid fallback (see
+    /// <see cref="PixelsPerCell"/>).</summary>
     public int MinBlobAreaPx { get; set; } = 800;
+
+    /// <summary>Detection-space pixels for one grid cell (one 2.5 cm token), or 0 when the grid
+    /// scale is unknown. When set, blob radii are snapped to whole-cell steps and sized in cells
+    /// via <see cref="MinObjectCells"/> instead of <see cref="MinBlobAreaPx"/>.</summary>
+    public float PixelsPerCell { get; set; }
+
+    /// <summary>Smallest object kept and drawn, measured in grid cells. Only used when
+    /// <see cref="PixelsPerCell"/> is set.</summary>
+    public double MinObjectCells { get; set; } = 1.0;
 
     /// <summary>Grayscale diff above this counts as an object. Fixed (not Otsu) so map
     /// texture / screen-photo appearance noise stays below it while an object clears it.</summary>
@@ -47,6 +58,10 @@ public sealed class FigurineDetector : IDisposable
     /// <see cref="ProduceCrops"/> is set). Owned by the detector — replaced/disposed on the
     /// next Detect; clone any you need to keep.</summary>
     public Mat[] LastCrops { get; private set; } = Array.Empty<Mat>();
+
+    /// <summary>TEMP DIAGNOSTIC: raw (pre-snap) MinEnclosingCircle radius of each kept blob, in
+    /// detection-space pixels, aligned 1:1 with the returned detections.</summary>
+    public double[] LastRawRadii { get; private set; } = Array.Empty<double>();
 
     public DetectStatus Detect(Mat cameraFrame, Bitmap playerView, out FigurineDetection[] detections)
     {
@@ -138,14 +153,30 @@ public sealed class FigurineDetector : IDisposable
             RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
         var list = new List<FigurineDetection>(contours.Length);
+        var rawRadii = new List<double>(contours.Length);
         foreach (var contour in contours)
         {
-            double area = Cv2.ContourArea(contour);
-            if (area < MinBlobAreaPx) continue;
             Cv2.MinEnclosingCircle(contour, out var center, out float radius);
+            float rawRadius = radius;
+            if (PixelsPerCell > 0)
+            {
+                // Grid scale known. Object size is measured as DIAMETER in cells (a mini occupies
+                // ~one grid square == one cell across), snapped to whole cells; drop anything below
+                // the minimum diameter (sub-token noise).
+                int cells = (int)Math.Round(2.0 * radius / PixelsPerCell);
+                if (cells < MinObjectCells) continue;
+                radius = cells * PixelsPerCell / 2f;
+            }
+            else
+            {
+                // No grid: legacy pixel-area filter, raw (unsnapped) radius.
+                if (Cv2.ContourArea(contour) < MinBlobAreaPx) continue;
+            }
             list.Add(new FigurineDetection(new PointF(center.X, center.Y), radius));
+            rawRadii.Add(rawRadius);
         }
         detections = list.ToArray();
+        LastRawRadii = rawRadii.ToArray();
 
         if (ProduceCrops && detections.Length > 0)
             LastCrops = CropDetections(detections);

@@ -79,6 +79,40 @@ public class FigurineDetectionTests
     }
 
     [Test]
+    public void PixelsPerCell_SnapsRadiusToWholeCells_AndRejectsSubMinBlobs()
+    {
+        using var view = RenderScene(960, 540);
+        using var cameraBgra = BitmapConverter.ToMat(RenderScene(1280, 720));
+        using var camera = cameraBgra.CvtColor(ColorConversionCodes.BGRA2BGR);
+        Cv2.Add(camera, new Scalar(40, 40, 40), camera);
+        Cv2.Circle(camera, new OpenCvSharp.Point(300, 360), 26, new Scalar(0, 0, 0), -1);
+
+        // Raw radius the detector measures for this object (no grid: legacy path, no snapping).
+        using var detector = new FigurineDetector { MinBlobAreaPx = 200 };
+        detector.Detect(camera, view, out var raw);
+        Assert.That(raw.Length, Is.EqualTo(1));
+        float r = raw[0].Radius;
+
+        // Size is measured as DIAMETER in cells. One cell == the raw radius means the object is
+        // ~two cells across -> radius snaps to 2*cell/2 == r (unchanged).
+        detector.PixelsPerCell = r;
+        detector.Detect(camera, view, out var twoCellDia);
+        Assert.That(twoCellDia.Length, Is.EqualTo(1));
+        Assert.That(twoCellDia[0].Radius, Is.EqualTo(r).Within(0.5f), "diameter snap keeps the radius");
+
+        // One cell == the raw diameter (2r) -> object is ~one cell across -> radius snaps to cell/2 == r.
+        detector.PixelsPerCell = r * 2f;
+        detector.Detect(camera, view, out var oneCellDia);
+        Assert.That(oneCellDia.Length, Is.EqualTo(1));
+        Assert.That(oneCellDia[0].Radius, Is.EqualTo(r).Within(0.5f), "one-cell-diameter token keeps its radius");
+
+        // One cell == 5x the raw radius -> object is ~0.4 cell across -> below the 1-cell minimum -> rejected.
+        detector.PixelsPerCell = r * 5f;
+        detector.Detect(camera, view, out var tooSmall);
+        Assert.That(tooSmall.Length, Is.EqualTo(0), "sub-one-cell blob is rejected as noise");
+    }
+
+    [Test]
     public void ProduceCrops_IsolatesObject_AsCircularMaskedCrop()
     {
         using var view = RenderScene(960, 540);

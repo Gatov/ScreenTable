@@ -55,6 +55,17 @@ public class PlayerController
         return _playersMap?.GetSnapshotViewRect(size) ?? RectangleF.Empty;
     }
 
+    public float GetPixelsPerCell(Size size)
+    {
+        return _playersMap?.PixelsPerCell(size) ?? 0f;
+    }
+
+    // TEMP DIAGNOSTIC: per-axis pixels-per-cell, to spot non-square (stretched) snapshot cells.
+    public (float x, float y) GetPixelsPerCellXY(Size size)
+    {
+        return _playersMap?.PixelsPerCellXY(size) ?? (0f, 0f);
+    }
+
     public PlayersMap PlayersMap => _playersMap;
 
     public byte[] RenderSnapshotPng(Size size)
