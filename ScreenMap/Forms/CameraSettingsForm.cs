@@ -27,7 +27,7 @@ public class CameraSettingsForm : Form
         Text = "Camera Settings";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(360, 396);
+        ClientSize = new Size(460, 396);
         MinimizeBox = false;
         MaximizeBox = false;
 
@@ -36,11 +36,12 @@ public class CameraSettingsForm : Form
         _deviceCombo = new ComboBox
         {
             Location = new Point(110, y),
-            Width = 160,
+            Width = 260,
+            DropDownWidth = 360,
             DropDownStyle = ComboBoxStyle.DropDownList
         };
         Controls.Add(_deviceCombo);
-        var rescanBtn = new Button { Text = "Rescan", Location = new Point(276, y - 1), Width = 70 };
+        var rescanBtn = new Button { Text = "Rescan", Location = new Point(376, y - 1), Width = 70 };
         rescanBtn.Click += (_, _) => PopulateDevices();
         Controls.Add(rescanBtn);
 
@@ -50,7 +51,7 @@ public class CameraSettingsForm : Form
         _intervalSlider = new TrackBar
         {
             Location = new Point(12, y + 22),
-            Width = 334,
+            Width = 434,
             Minimum = 10,
             Maximum = 50,
             TickFrequency = 5,
@@ -67,7 +68,7 @@ public class CameraSettingsForm : Form
         _thresholdSlider = new TrackBar
         {
             Location = new Point(12, y + 22),
-            Width = 334,
+            Width = 434,
             Minimum = 20,
             Maximum = 150,
             TickFrequency = 10,
@@ -84,7 +85,7 @@ public class CameraSettingsForm : Form
         _minSizeSlider = new TrackBar
         {
             Location = new Point(12, y + 22),
-            Width = 334,
+            Width = 434,
             Minimum = 1,
             Maximum = 6,
             SmallChange = 1,
@@ -130,14 +131,14 @@ public class CameraSettingsForm : Form
         {
             Text = "OK",
             DialogResult = DialogResult.OK,
-            Location = new Point(184, 358),
+            Location = new Point(284, 358),
             Width = 80
         };
         var cancelBtn = new Button
         {
             Text = "Cancel",
             DialogResult = DialogResult.Cancel,
-            Location = new Point(270, 358),
+            Location = new Point(370, 358),
             Width = 80
         };
         AcceptButton = okBtn;
@@ -147,7 +148,7 @@ public class CameraSettingsForm : Form
 
         okBtn.Click += (_, _) =>
         {
-            _settings.DeviceIndex = _deviceCombo.SelectedItem is int di ? di : 0;
+            _settings.DeviceIndex = _deviceCombo.SelectedItem is DeviceItem item ? item.Index : 0;
             _settings.IntervalSeconds = _intervalSlider.Value / 10.0;
             _settings.DiffThreshold = _thresholdSlider.Value;
             _settings.MinObjectCells = _minSizeSlider.Value;
@@ -185,8 +186,21 @@ public class CameraSettingsForm : Form
         {
             _settings.DeviceIndex
         };
-        foreach (var i in indices) _deviceCombo.Items.Add(i);
-        var idx = _deviceCombo.Items.IndexOf(_settings.DeviceIndex);
-        _deviceCombo.SelectedIndex = idx >= 0 ? idx : 0;
+        // Friendly names are positional: DirectShow index i == OpenCV DSHOW index i.
+        var names = DirectShowDevices.GetNames();
+        int selected = 0;
+        foreach (var i in indices)
+        {
+            var name = i >= 0 && i < names.Count ? names[i] : "";
+            var added = _deviceCombo.Items.Add(new DeviceItem(i, name));
+            if (i == _settings.DeviceIndex) selected = added;
+        }
+        if (_deviceCombo.Items.Count > 0) _deviceCombo.SelectedIndex = selected;
+    }
+
+    private readonly record struct DeviceItem(int Index, string Name)
+    {
+        public override string ToString() =>
+            string.IsNullOrEmpty(Name) ? $"Camera {Index}" : $"Camera {Index}: {Name}";
     }
 }
