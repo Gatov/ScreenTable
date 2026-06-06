@@ -44,6 +44,11 @@ public sealed class FigurineDetector : IDisposable
     /// <see cref="PixelsPerCell"/> is set.</summary>
     public double MinObjectCells { get; set; } = 1.0;
 
+    /// <summary>Minimum fill ratio (contour area / enclosing-circle area). A real token is a solid
+    /// disc (~0.5–1.0); diffuse glare and registration smears fill their enclosing circle poorly,
+    /// so this rejects them. 0 disables the check.</summary>
+    public double MinFillRatio { get; set; } = 0.35;
+
     /// <summary>Grayscale diff above this counts as an object. Fixed (not Otsu) so map
     /// texture / screen-photo appearance noise stays below it while an object clears it.</summary>
     public int DiffThreshold { get; set; } = 70;
@@ -62,6 +67,10 @@ public sealed class FigurineDetector : IDisposable
     /// <summary>TEMP DIAGNOSTIC: raw (pre-snap) MinEnclosingCircle radius of each kept blob, in
     /// detection-space pixels, aligned 1:1 with the returned detections.</summary>
     public double[] LastRawRadii { get; private set; } = Array.Empty<double>();
+
+    /// <summary>TEMP DIAGNOSTIC: fill ratio (contourArea / enclosing-circle area) of each kept
+    /// blob — ~1 for a solid disc, low for a diffuse/ring glare artifact.</summary>
+    public double[] LastFillRatios { get; private set; } = Array.Empty<double>();
 
     public DetectStatus Detect(Mat cameraFrame, Bitmap playerView, out FigurineDetection[] detections)
     {
@@ -154,10 +163,15 @@ public sealed class FigurineDetector : IDisposable
 
         var list = new List<FigurineDetection>(contours.Length);
         var rawRadii = new List<double>(contours.Length);
+        var fillRatios = new List<double>(contours.Length);
         foreach (var contour in contours)
         {
             Cv2.MinEnclosingCircle(contour, out var center, out float radius);
             float rawRadius = radius;
+            double fill = radius > 0 ? Cv2.ContourArea(contour) / (Math.PI * radius * radius) : 0;
+            // Reject diffuse / smeared blobs that don't fill their enclosing circle — a solid
+            // token does, glare and registration artifacts do not.
+            if (MinFillRatio > 0 && fill < MinFillRatio) continue;
             if (PixelsPerCell > 0)
             {
                 // Grid scale known. Object size is measured as DIAMETER in cells (a mini occupies
@@ -174,9 +188,11 @@ public sealed class FigurineDetector : IDisposable
             }
             list.Add(new FigurineDetection(new PointF(center.X, center.Y), radius));
             rawRadii.Add(rawRadius);
+            fillRatios.Add(fill);
         }
         detections = list.ToArray();
         LastRawRadii = rawRadii.ToArray();
+        LastFillRatios = fillRatios.ToArray();
 
         if (ProduceCrops && detections.Length > 0)
             LastCrops = CropDetections(detections);

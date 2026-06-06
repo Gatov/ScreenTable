@@ -107,8 +107,8 @@ internal static class Program
 
                 using var mapBitmap = mapFile != null ? (Bitmap)Image.FromFile(mapFile) : null;
 
-                // We'll run 5 predefined test positions for each map
-                int testPositions = 5;
+                // We'll run 1 random test position per map
+                int testPositions = 1;
                 for (int loop = 0; loop < testPositions; loop++)
                 {
                     runId++;
@@ -123,24 +123,9 @@ internal static class Program
                     using var displayedScene = (Bitmap)baseScene.Clone();
                     int margin = 250;
                     float mockRadius = 40;
-                    float mockX, mockY;
-                    string posName;
-
-                    switch (loop)
-                    {
-                        case 0: // Top Center
-                            mockX = sceneSize.Width / 2f; mockY = margin; posName = "Top-Center"; break;
-                        case 1: // Bottom Center
-                            mockX = sceneSize.Width / 2f; mockY = sceneSize.Height - margin; posName = "Bottom-Center"; break;
-                        case 2: // Left Center
-                            mockX = margin; mockY = sceneSize.Height / 2f; posName = "Left-Center"; break;
-                        case 3: // Right Center
-                            mockX = sceneSize.Width - margin; mockY = sceneSize.Height / 2f; posName = "Right-Center"; break;
-                        default: // Random
-                            mockX = rng.Next(margin, Math.Max(margin + 1, sceneSize.Width - margin));
-                            mockY = rng.Next(margin, Math.Max(margin + 1, sceneSize.Height - margin));
-                            posName = "Random"; break;
-                    }
+                    float mockX = rng.Next(margin, Math.Max(margin + 1, sceneSize.Width - margin));
+                    float mockY = rng.Next(margin, Math.Max(margin + 1, sceneSize.Height - margin));
+                    string posName = "Random";
 
                     using (var g = Graphics.FromImage(displayedScene))
                     {

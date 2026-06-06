@@ -87,6 +87,14 @@ public class TestRunner
                 // Reference scene will be saved after detection to include overlays
             }
 
+            // --- AutoTuner Check ---
+            var tuner = new AutoTuner();
+            // Assume the frame width spans about 30 cells to test grid-aware tuning
+            float simulatedPpc = capturedFrame.Width / 30f;
+            var tuneResult = tuner.Tune(capturedFrame, referenceScene, pixelsPerCell: simulatedPpc);
+            Console.Error.WriteLine($"    [AutoTuner] Success: {tuneResult.Success}, Thresh: {tuneResult.DiffThreshold}, " +
+                                    $"Blobs: {tuneResult.BlobCount}, MinCells: {tuneResult.MinObjectCells:F1}, Msg: {tuneResult.Message}");
+
             // --- Count markers found (for diagnostics) ---
             using var dict = CvAruco.GetPredefinedDictionary(ArucoMarkers.DictName);
             var detParams = ArucoMarkers.CreateDetectorParameters();

@@ -7,7 +7,7 @@ The `ScreenMap.TestHarness` is designed to validate the physical-to-digital alig
 
 ## Prerequisites
 1. **Physical Setup**: The user must have a physical camera and a display screen connected.
-2. **Maps Directory**: You will need a directory containing sample maps (e.g., `.jpg` or `.png` files). Ask the user for this path if not known.
+2. **Maps Directory**: The default location for sample maps is `G:\My Drive\AD&D\_Campaigns\Carrion Crown\Maps`. Use this path for `--maps` unless the user specifies otherwise.
 
 ## Execution
 Run the test harness using the `.NET` CLI. You will need to determine the appropriate `--camera` and `--display` indices based on the user's environment.
@@ -18,6 +18,12 @@ dotnet run --project "c:\Work\ScreenTable\ScreenMap.TestHarness\ScreenMap.TestHa
 
 ### Optional Arguments
 * `--all`: By default, the harness only runs against the first map found in the directory. Include this flag to run the test matrix against all maps.
+
+### Auto-Tuning Test
+The test harness automatically runs the `AutoTuner` pipeline as part of its cycle to simulate grid-aware tuning.
+* It approximates a 30-cell wide grid across the camera frame to provide a simulated `pixelsPerCell`.
+* The `AutoTuner` will sweep thresholds to find the optimum detection parameters.
+* Review the standard output/error for lines prefixed with `[AutoTuner]` to verify whether tuning succeeded, the chosen threshold (`Thresh`), and the minimum size (`MinCells`).
 
 ## Verification
 1. **Asynchronous Execution**: Launch the command in the background and wait for it to complete.

@@ -113,6 +113,25 @@ public class FigurineDetectionTests
     }
 
     [Test]
+    public void MinFillRatio_RejectsDiffuseBlob_KeepsSolidDisc()
+    {
+        using var view = RenderScene(960, 540);
+        using var cameraBgra = BitmapConverter.ToMat(RenderScene(1280, 720));
+        using var camera = cameraBgra.CvtColor(ColorConversionCodes.BGRA2BGR);
+        Cv2.Add(camera, new Scalar(40, 40, 40), camera);
+        // Solid disc on the left (fill ~1) and a long thin bar on the right (low fill — a
+        // stand-in for diffuse glare / registration smear).
+        Cv2.Circle(camera, new OpenCvSharp.Point(280, 360), 26, new Scalar(0, 0, 0), -1);
+        Cv2.Rectangle(camera, new Rect(640, 354, 200, 14), new Scalar(0, 0, 0), -1);
+
+        using var detector = new FigurineDetector { MinBlobAreaPx = 50, MinFillRatio = 0.4 };
+        detector.Detect(camera, view, out var dets);
+
+        Assert.That(dets.Length, Is.EqualTo(1), "diffuse bar rejected on fill ratio, solid disc kept");
+        Assert.That(dets[0].Center.X, Is.LessThan(view.Width / 2f), "kept blob is the disc on the left");
+    }
+
+    [Test]
     public void ProduceCrops_IsolatesObject_AsCircularMaskedCrop()
     {
         using var view = RenderScene(960, 540);
