@@ -107,7 +107,9 @@ internal static class Program
 
                 using var mapBitmap = mapFile != null ? (Bitmap)Image.FromFile(mapFile) : null;
 
-                for (int loop = 0; loop < loops; loop++)
+                // We'll run 5 predefined test positions for each map
+                int testPositions = 5;
+                for (int loop = 0; loop < testPositions; loop++)
                 {
                     runId++;
                     int seed = Environment.TickCount + runId;
@@ -115,27 +117,73 @@ internal static class Program
 
                     // Render a random view of this map
                     var sceneSize = new Size(targetScreen.Bounds.Width, targetScreen.Bounds.Height);
-                    using var scene = TestSceneRenderer.RenderScene(sceneSize, mapBitmap, rng);
+                    using var baseScene = TestSceneRenderer.RenderScene(sceneSize, mapBitmap, rng);
+
+                    // Create a scene with a mock figurine overlay to display
+                    using var displayedScene = (Bitmap)baseScene.Clone();
+                    int margin = 250;
+                    float mockRadius = 40;
+                    float mockX, mockY;
+                    string posName;
+
+                    switch (loop)
+                    {
+                        case 0: // Top Center
+                            mockX = sceneSize.Width / 2f; mockY = margin; posName = "Top-Center"; break;
+                        case 1: // Bottom Center
+                            mockX = sceneSize.Width / 2f; mockY = sceneSize.Height - margin; posName = "Bottom-Center"; break;
+                        case 2: // Left Center
+                            mockX = margin; mockY = sceneSize.Height / 2f; posName = "Left-Center"; break;
+                        case 3: // Right Center
+                            mockX = sceneSize.Width - margin; mockY = sceneSize.Height / 2f; posName = "Right-Center"; break;
+                        default: // Random
+                            mockX = rng.Next(margin, Math.Max(margin + 1, sceneSize.Width - margin));
+                            mockY = rng.Next(margin, Math.Max(margin + 1, sceneSize.Height - margin));
+                            posName = "Random"; break;
+                    }
+
+                    using (var g = Graphics.FromImage(displayedScene))
+                    {
+                        // Draw a highly contrasting white circle with black outline to guarantee luma diff
+                        using var brush = new SolidBrush(Color.White);
+                        using var pen = new Pen(Color.Black, 6);
+                        g.FillEllipse(brush, mockX - mockRadius, mockY - mockRadius, mockRadius * 2, mockRadius * 2);
+                        g.DrawEllipse(pen, mockX - mockRadius, mockY - mockRadius, mockRadius * 2, mockRadius * 2);
+                    }
 
                     // Display it
-                    displayForm.SetScene((Bitmap)scene.Clone());
+                    displayForm.SetScene((Bitmap)displayedScene.Clone());
                     Application.DoEvents();
 
                     // Brief pause to let the screen update and the camera see it
                     System.Threading.Thread.Sleep(500);
 
-                    // Run detection
-                    var result = runner.RunCycle(camera, scene, runId, mapName, seed);
+                    // Run detection using the clean baseScene as reference
+                    var result = runner.RunCycle(camera, baseScene, runId, mapName, seed, new PointF(mockX, mockY), mockRadius);
                     allResults.Add(result);
+
+                    // Verify if the detected figurine matches the mock position
+                    bool positionCorrect = false;
+                    foreach (var f in result.Figurines)
+                    {
+                        double dist = Math.Sqrt(Math.Pow(f.CenterX - mockX, 2) + Math.Pow(f.CenterY - mockY, 2));
+                        if (dist < 50) // 50px tolerance
+                        {
+                            positionCorrect = true;
+                            break;
+                        }
+                    }
 
                     // Report
                     string status = result.MarkersDetected ? "OK" : "MARKERS_MISSING";
                     if (!string.IsNullOrEmpty(result.ErrorMessage)) status = "ERROR";
-                    Console.Error.WriteLine(
-                        $"  Run {runId}: {status} | markers={result.MarkerCount}/4 | " +
-                        $"figurines={result.FigurineCount} | {result.ProcessingMs:F0}ms");
+                    else if (result.MarkersDetected) status = positionCorrect ? "OK_MATCH" : "POS_MISMATCH";
 
-                    if (!result.MarkersDetected || !string.IsNullOrEmpty(result.ErrorMessage))
+                    Console.Error.WriteLine(
+                        $"  Run {runId} [{posName}]: {status} | markers={result.MarkerCount}/4 | " +
+                        $"figurines={result.FigurineCount} (target: {mockX:F0},{mockY:F0}) | {result.ProcessingMs:F0}ms");
+
+                    if (!result.MarkersDetected || !string.IsNullOrEmpty(result.ErrorMessage) || !positionCorrect)
                         anyFailure = true;
                 }
             }

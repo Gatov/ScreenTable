@@ -37,7 +37,7 @@ public class TestRunner
     /// <param name="mapName">Name of the map file used.</param>
     /// <param name="randomSeed">The seed used to generate the scene crop.</param>
     public DetectionResult RunCycle(ICameraSource camera, Bitmap referenceScene,
-        int runId, string mapName, int randomSeed)
+        int runId, string mapName, int randomSeed, PointF? expectedFigurine = null, float expectedRadius = 0)
     {
         var result = new DetectionResult
         {
@@ -84,9 +84,7 @@ public class TestRunner
                 Cv2.ImWrite(rawPath, capturedFrame);
                 result.RawFramePath = Path.GetRelativePath(_outputDir, rawPath);
 
-                var refPath = Path.Combine(runDir, "reference-scene.png");
-                referenceScene.Save(refPath, ImageFormat.Png);
-                result.ReferenceScenePath = Path.GetRelativePath(_outputDir, refPath);
+                // Reference scene will be saved after detection to include overlays
             }
 
             // --- Count markers found (for diagnostics) ---
@@ -112,7 +110,7 @@ public class TestRunner
                 Radius = d.Radius,
             }).ToArray();
 
-            // --- Save annotated frame ---
+            // --- Save annotated frame and reference scene ---
             if (runDir != null)
             {
                 var annotated = BuildAnnotatedImage(capturedFrame, detections, ids, result);
@@ -120,6 +118,29 @@ public class TestRunner
                 Cv2.ImWrite(annotatedPath, annotated);
                 annotated.Dispose();
                 result.AnnotatedFramePath = Path.GetRelativePath(_outputDir, annotatedPath);
+
+                using var annotatedRef = (Bitmap)referenceScene.Clone();
+                using (var g = Graphics.FromImage(annotatedRef))
+                {
+                    g.SmoothingMode = SmoothingMode.HighQuality;
+                    if (expectedFigurine.HasValue)
+                    {
+                        using var pinkBrush = new SolidBrush(Color.FromArgb(128, 255, 20, 147)); // DeepPink 50%
+                        float r = expectedRadius;
+                        g.FillEllipse(pinkBrush, expectedFigurine.Value.X - r, expectedFigurine.Value.Y - r, r * 2, r * 2);
+                    }
+                    if (detections != null)
+                    {
+                        using var blueBrush = new SolidBrush(Color.FromArgb(128, 0, 0, 255)); // Blue 50%
+                        foreach (var d in detections)
+                        {
+                            g.FillEllipse(blueBrush, d.Center.X - d.Radius, d.Center.Y - d.Radius, d.Radius * 2, d.Radius * 2);
+                        }
+                    }
+                }
+                var refPath = Path.Combine(runDir, "reference-scene.png");
+                annotatedRef.Save(refPath, ImageFormat.Png);
+                result.ReferenceScenePath = Path.GetRelativePath(_outputDir, refPath);
             }
         }
         catch (Exception ex)
