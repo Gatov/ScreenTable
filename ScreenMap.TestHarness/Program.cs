@@ -26,6 +26,7 @@ namespace ScreenMap.TestHarness;
 ///   --all                Run detection on ALL maps in the directory (default: first only)
 ///   --loops   &lt;n&gt;        Capture→detect cycles per map (default: 1)
 ///   --display &lt;n&gt;        Screen index to display on (default: 0 = primary)
+///   --physical           Test with a physical figurine placed on the screen (disables mock drawing)
 ///   --json               Print DetectionResult JSON to stdout
 /// </summary>
 internal static class Program
@@ -46,6 +47,7 @@ internal static class Program
         bool runAll = args.Contains("--all", StringComparer.OrdinalIgnoreCase);
         int loops = GetIntArg(args, "--loops", 1);
         int displayIndex = GetIntArg(args, "--display", 0);
+        bool physicalFigurine = args.Contains("--physical", StringComparer.OrdinalIgnoreCase);
         bool jsonOut = args.Contains("--json", StringComparer.OrdinalIgnoreCase);
 
         // --- Find map images ---
@@ -107,8 +109,8 @@ internal static class Program
 
                 using var mapBitmap = mapFile != null ? (Bitmap)Image.FromFile(mapFile) : null;
 
-                // We'll run 1 random test position per map
-                int testPositions = 1;
+                // Run 'loops' test positions per map
+                int testPositions = loops;
                 for (int loop = 0; loop < testPositions; loop++)
                 {
                     runId++;
@@ -123,17 +125,25 @@ internal static class Program
                     using var displayedScene = (Bitmap)baseScene.Clone();
                     int margin = 250;
                     float mockRadius = 40;
-                    float mockX = rng.Next(margin, Math.Max(margin + 1, sceneSize.Width - margin));
-                    float mockY = rng.Next(margin, Math.Max(margin + 1, sceneSize.Height - margin));
-                    string posName = "Random";
-
-                    using (var g = Graphics.FromImage(displayedScene))
+                    float mockX = 0;
+                    float mockY = 0;
+                    if (!physicalFigurine)
                     {
-                        // Draw a highly contrasting white circle with black outline to guarantee luma diff
-                        using var brush = new SolidBrush(Color.White);
-                        using var pen = new Pen(Color.Black, 6);
-                        g.FillEllipse(brush, mockX - mockRadius, mockY - mockRadius, mockRadius * 2, mockRadius * 2);
-                        g.DrawEllipse(pen, mockX - mockRadius, mockY - mockRadius, mockRadius * 2, mockRadius * 2);
+                        mockX = rng.Next(margin, Math.Max(margin + 1, sceneSize.Width - margin));
+                        mockY = rng.Next(margin, Math.Max(margin + 1, sceneSize.Height - margin));
+                    }
+                    string posName = physicalFigurine ? "Physical" : "Random";
+
+                    if (!physicalFigurine)
+                    {
+                        using (var g = Graphics.FromImage(displayedScene))
+                        {
+                            // Draw a highly contrasting white circle with black outline to guarantee luma diff
+                            using var brush = new SolidBrush(Color.White);
+                            using var pen = new Pen(Color.Black, 6);
+                            g.FillEllipse(brush, mockX - mockRadius, mockY - mockRadius, mockRadius * 2, mockRadius * 2);
+                            g.DrawEllipse(pen, mockX - mockRadius, mockY - mockRadius, mockRadius * 2, mockRadius * 2);
+                        }
                     }
 
                     // Display it
@@ -144,29 +154,47 @@ internal static class Program
                     System.Threading.Thread.Sleep(500);
 
                     // Run detection using the clean baseScene as reference
-                    var result = runner.RunCycle(camera, baseScene, runId, mapName, seed, new PointF(mockX, mockY), mockRadius);
+                    PointF? expectedFigurine = physicalFigurine ? null : new PointF(mockX, mockY);
+                    var result = runner.RunCycle(camera, baseScene, runId, mapName, seed, expectedFigurine, physicalFigurine ? 0 : mockRadius);
                     allResults.Add(result);
 
-                    // Verify if the detected figurine matches the mock position
+                    // Verify if the detected figurine matches the mock position (or if a physical figurine was found)
                     bool positionCorrect = false;
-                    foreach (var f in result.Figurines)
+                    string targetStr;
+                    if (physicalFigurine)
                     {
-                        double dist = Math.Sqrt(Math.Pow(f.CenterX - mockX, 2) + Math.Pow(f.CenterY - mockY, 2));
-                        if (dist < 50) // 50px tolerance
+                        if (result.Figurines.Length > 0)
                         {
                             positionCorrect = true;
-                            break;
+                            targetStr = $"{result.Figurines[0].CenterX:F0},{result.Figurines[0].CenterY:F0}";
                         }
+                        else
+                        {
+                            targetStr = "none";
+                        }
+                    }
+                    else
+                    {
+                        foreach (var f in result.Figurines)
+                        {
+                            double dist = Math.Sqrt(Math.Pow(f.CenterX - mockX, 2) + Math.Pow(f.CenterY - mockY, 2));
+                            if (dist < 50) // 50px tolerance
+                            {
+                                positionCorrect = true;
+                                break;
+                            }
+                        }
+                        targetStr = $"{mockX:F0},{mockY:F0}";
                     }
 
                     // Report
                     string status = result.MarkersDetected ? "OK" : "MARKERS_MISSING";
                     if (!string.IsNullOrEmpty(result.ErrorMessage)) status = "ERROR";
-                    else if (result.MarkersDetected) status = positionCorrect ? "OK_MATCH" : "POS_MISMATCH";
+                    else if (result.MarkersDetected) status = positionCorrect ? "OK_MATCH" : (physicalFigurine ? "NO_FIGURINE" : "POS_MISMATCH");
 
                     Console.Error.WriteLine(
                         $"  Run {runId} [{posName}]: {status} | markers={result.MarkerCount}/4 | " +
-                        $"figurines={result.FigurineCount} (target: {mockX:F0},{mockY:F0}) | {result.ProcessingMs:F0}ms");
+                        $"figurines={result.FigurineCount} (target: {targetStr}) | {result.ProcessingMs:F0}ms");
 
                     if (!result.MarkersDetected || !string.IsNullOrEmpty(result.ErrorMessage) || !positionCorrect)
                         anyFailure = true;

@@ -104,6 +104,13 @@ public class TestRunner
 
             // --- Run the detection pipeline ---
             using var detector = new FigurineDetector { ProduceCrops = true };
+            if (tuneResult.Success)
+            {
+                detector.DiffThreshold = tuneResult.DiffThreshold;
+                detector.MinObjectCells = tuneResult.MinObjectCells;
+                detector.PixelsPerCell = simulatedPpc;
+            }
+            
             var sw = Stopwatch.StartNew();
             var status = detector.Detect(capturedFrame, referenceScene, out var detections);
             sw.Stop();
