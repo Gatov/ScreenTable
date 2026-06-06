@@ -77,7 +77,10 @@ namespace ScreenMap
             };
 
             InitializeDetectionService();
+            // Seed the spin without firing EditValueChanged (which would Save + re-Apply on every launch).
+            barEditItemMinis.EditValueChanged -= barEditItemMinis_EditValueChanged;
             barEditItemMinis.EditValue = _cameraSettings.ExpectedFigurines;
+            barEditItemMinis.EditValueChanged += barEditItemMinis_EditValueChanged;
         }
 
         private void InitializeDetectionService()
