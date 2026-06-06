@@ -301,8 +301,9 @@ public sealed class DetectionService : IDisposable
                     PublishCrops(_detector.LastCrops);            // Mats for the preview window
                     cropBmps = BuildCropBitmaps(_detector.LastCrops); // Bitmaps for the map overlay
                 }
+                // drawn/detected: kept after the score-ranked cap, over raw blobs past the diff threshold.
                 _store.Update(translated, cropBmps, DetectionStatus.Ok,
-                    $"ok ({translated.Length}){DiagString()}");
+                    $"ok ({translated.Length}/{_detector.LastContourCount}){DiagString()}");
                 break;
             case DetectStatus.NoMarkers:
                 _store.SetStatus(DetectionStatus.NoMarkers, "no markers");

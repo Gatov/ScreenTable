@@ -83,6 +83,10 @@ public sealed class FigurineDetector : IDisposable
     /// blob — ~1 for a solid disc, low for a diffuse/ring glare artifact.</summary>
     public double[] LastFillRatios { get; private set; } = Array.Empty<double>();
 
+    /// <summary>Number of raw blobs found right after the diff threshold + morphology, before the
+    /// size/fill gates and the score-ranked cap. The "detected" half of drawn/detected.</summary>
+    public int LastContourCount { get; private set; }
+
     public DetectStatus Detect(Mat cameraFrame, Bitmap playerView, out FigurineDetection[] detections)
     {
         detections = Array.Empty<FigurineDetection>();
@@ -194,6 +198,7 @@ public sealed class FigurineDetector : IDisposable
 
         Cv2.FindContours(_morphed, out var contours, out _,
             RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+        LastContourCount = contours.Length;
 
         // Candidate carries everything we need to keep the per-detection arrays 1:1 after
         // the score-ranked cap reorders them.

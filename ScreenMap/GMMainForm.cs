@@ -153,6 +153,30 @@ namespace ScreenMap
             }
         }
 
+        private void barButtonItemAutoTune_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        {
+            var prompt = MessageBox.Show(this,
+                "Place ONE token (the smallest you use) on the map and clear everything else, " +
+                "then click OK.\n\nAuto-tune will find the sensitivity and minimum size that " +
+                "isolate just that token.",
+                "Auto-tune detection", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
+            if (prompt != DialogResult.OK) return;
+
+            Cursor = Cursors.WaitCursor;
+            try
+            {
+                var result = _detectionService.AutoTune();
+                if (!result.Success)
+                    MessageBox.Show(this, result.Message, "Auto-tune",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+                UpdateCameraStatus();
+            }
+        }
+
         private void barButtonItemPreview_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
         {
             if (_previewForm != null && !_previewForm.IsDisposed)
