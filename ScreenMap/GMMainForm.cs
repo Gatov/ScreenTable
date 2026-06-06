@@ -77,6 +77,7 @@ namespace ScreenMap
             };
 
             InitializeDetectionService();
+            barEditItemMinis.EditValue = _cameraSettings.ExpectedFigurines;
         }
 
         private void InitializeDetectionService()
@@ -119,6 +120,13 @@ namespace ScreenMap
             // TEMP DIAGNOSTIC: show per-axis pixels-per-cell for the detection snapshot.
             var (ppx, ppy) = _controller.GetPixelsPerCellXY(CameraSnapshotSize);
             barStaticItemCameraStatus.Caption = $"Camera: {text} | ppcXY={ppx:0}/{ppy:0}";
+        }
+
+        private void barEditItemMinis_EditValueChanged(object sender, EventArgs e)
+        {
+            _cameraSettings.ExpectedFigurines = Convert.ToInt32(barEditItemMinis.EditValue ?? 0);
+            _cameraSettings.Save();
+            _detectionService.Apply(_cameraSettings);
         }
 
         private void barButtonItemCamera_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
