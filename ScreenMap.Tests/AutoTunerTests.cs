@@ -37,7 +37,7 @@ public class AutoTunerTests
 
         Assert.That(r.Success, Is.True);
         Assert.That(r.DiffThreshold, Is.EqualTo(35), "center of the 30..40 single-token plateau");
-        Assert.That(r.MinObjectCells, Is.EqualTo(1.05).Within(0.01), "token is one cell across");
+        Assert.That(r.MinObjectCells, Is.EqualTo(1.0), "token is one cell across");
         Assert.That(r.BlobCount, Is.EqualTo(1));
         Assert.That(r.MinBlobAreaPx, Is.EqualTo(0), "px area is unused when the grid scale is known");
     }
@@ -56,7 +56,7 @@ public class AutoTunerTests
         var r = AutoTuner.SelectThreshold(sweep, ppc);
 
         Assert.That(r.Success, Is.True, "best-effort: always returns a recommendation");
-        Assert.That(r.MinObjectCells, Is.EqualTo(0.6).Within(0.01), "the token is still ~one cell across");
+        Assert.That(r.MinObjectCells, Is.EqualTo(1.0), "the token is still one cell across");
         Assert.That(r.Message, Does.Contain("blob"), "message flags the imperfect result");
     }
 
@@ -139,7 +139,7 @@ public class AutoTunerTests
             var r = new AutoTuner().Tune(frame, view, ppc);
 
             Assert.That(r.Success, Is.True);
-            Assert.That(r.MinObjectCells, Is.EqualTo(0.87).Within(0.05), "the placed token is one cell across");
+            Assert.That(r.MinObjectCells, Is.EqualTo(1.0), "the placed token is one cell across");
             Assert.That(r.DiffThreshold, Is.InRange(AutoTuner.MinThreshold, AutoTuner.MaxThreshold));
         }
     }

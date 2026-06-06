@@ -107,8 +107,8 @@ public class FigurineDetectionTests
         Assert.That(oneCellDia.Length, Is.EqualTo(1));
         Assert.That(oneCellDia[0].Radius, Is.EqualTo(r).Within(0.5f), "one-cell-diameter token keeps its radius");
 
-        // One cell == 10x the raw radius -> object is ~0.2 cell across -> below the 1-cell minimum -> rejected.
-        detector.PixelsPerCell = r * 10f;
+        // One cell == 5x the raw radius -> object is ~0.4 cell across -> below the 1-cell minimum -> rejected.
+        detector.PixelsPerCell = r * 5f;
         detector.Detect(camera, view, out var tooSmall);
         Assert.That(tooSmall.Length, Is.EqualTo(0), "sub-one-cell blob is rejected as noise");
     }
@@ -319,10 +319,7 @@ public class FigurineDetectionTests
         var (frame, view) = LoadCapture("20260531-171645");
         using (frame)
         using (view)
-        // Use DiffThreshold = 80 (up from default 40) because this is a noisy, steeply angled map.
-        // The new Convex Hull logic correctly preserves D-shapes (like side-lit figurines), so
-        // registration artifacts now pass shape filters and require a realistic threshold.
-        using (var detector = new FigurineDetector() { DiffThreshold = 80 })
+        using (var detector = new FigurineDetector())
         {
             var status = detector.Detect(frame, view, out var dets);
             Assert.That(status, Is.EqualTo(DetectStatus.Ok));

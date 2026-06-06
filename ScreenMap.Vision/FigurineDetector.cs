@@ -39,9 +39,6 @@ public sealed class FigurineDetector : IDisposable
     /// via <see cref="MinObjectCells"/> instead of <see cref="MinBlobAreaPx"/>.</summary>
     public float PixelsPerCell { get; set; }
 
-    /// <summary>Returns the camera frame warped to match the reference map geometry.</summary>
-    public Mat Warped => _warped;
-
     /// <summary>Smallest object kept and drawn, measured in grid cells. Only used when
     /// <see cref="PixelsPerCell"/> is set.</summary>
     public double MinObjectCells { get; set; } = 0.3;
@@ -53,7 +50,7 @@ public sealed class FigurineDetector : IDisposable
     /// <summary>Minimum fill ratio (contour area / enclosing-circle area). A real token is a solid
     /// disc (~0.5–1.0); diffuse glare and registration smears fill their enclosing circle poorly,
     /// so this rejects them. 0 disables the check.</summary>
-    public double MinFillRatio { get; set; } = 0.35;
+    public double MinFillRatio { get; set; } = 0;
 
     /// <summary>Expected number of figurines on the table. When &gt; 0 the detector keeps only
     /// the <c>ExpectedCount</c> strongest blobs (by <see cref="FigurineDetection.Score"/>); when 0
@@ -224,7 +221,7 @@ public sealed class FigurineDetector : IDisposable
             else
             {
                 // No grid: legacy pixel-area filter, raw (unsnapped) radius.
-                if (Cv2.ContourArea(hull) < MinBlobAreaPx) continue;
+                if (Cv2.ContourArea(contour) < MinBlobAreaPx) continue;
             }
             // Score: Distance between the average color of the reference and the average color of the camera frame
             float score = MeanColorDistanceV2(_playerMat, _warped, hull);
@@ -472,14 +469,6 @@ public sealed class FigurineDetector : IDisposable
                     baseScore -= 1000;
                 }
             }
-        }
-
-        // Penalty 2: White/warm-white glare (high brightness, low/medium saturation).
-        // Since we are averaging over the convex hull (which includes the figurine's dark shadow),
-        // a real figurine will never average out to extremely bright white.
-        if (vWarp > 180 && sWarp < 80)
-        {
-            baseScore -= 1000;
         }
 
         return baseScore;
