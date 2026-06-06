@@ -103,11 +103,10 @@ public sealed class FigurineDetector : IDisposable
         }
 
         // Warp the camera frame so its fiducials land on the REFERENCE's fiducials. Mapping
-        // marker-centers -> the reference's own detected marker-centers (not the image
+        // marker-centers -> the reference's mathematical marker-centers (not the image
         // corners) aligns the map content even though the filmed screen and the reference
         // are rendered at different resolutions (fiducials sit at the same fraction).
-        var refCenters = DetectMarkerCenters(_playerMat);
-        if (refCenters == null) return DetectStatus.NoMarkers;
+        var refCenters = MarkerRenderer.GetFiducialCenters(new SizeF(dstW, dstH));
 
         var srcPts = new[] { src[0], src[1], src[2], src[3] };
         var dstPts = new[] { refCenters[0], refCenters[1], refCenters[2], refCenters[3] };
