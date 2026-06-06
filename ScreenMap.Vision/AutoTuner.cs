@@ -55,9 +55,17 @@ public sealed class AutoTuner
             var status = detector.Detect(cameraFrame, referenceView, out var dets);
             if (status != DetectStatus.Ok) continue;
             anyOk = true;
-            var radii = new double[dets.Length];
-            for (int i = 0; i < dets.Length; i++) radii[i] = dets[i].Radius;
-            sweep.Add((t, radii));
+            var validRadii = new System.Collections.Generic.List<double>();
+            for (int i = 0; i < dets.Length; i++)
+            {
+                if (pixelsPerCell > 0)
+                {
+                    double cells = 2.0 * dets[i].Radius / pixelsPerCell;
+                    if (cells > 4.5) continue; // Filter out massive glare
+                }
+                validRadii.Add(dets[i].Radius);
+            }
+            sweep.Add((t, validRadii.ToArray()));
         }
 
         if (!anyOk)
@@ -86,9 +94,9 @@ public sealed class AutoTuner
         IReadOnlyList<(int threshold, double[] radiiPx)> sweep, float ppc)
     {
         // Object size is measured as DIAMETER in cells. A blob counts as a token when it spans at
-        // least one cell across; sub-cell blobs are noise.
+        // least 0.3 cells across; sub-cell blobs are noise.
         double DiaCells(double r) => 2.0 * r / ppc;
-        bool TokenSized(double r) => (int)Math.Round(DiaCells(r)) >= 1;
+        bool TokenSized(double r) => DiaCells(r) >= 0.3;
 
         // A threshold qualifies when it yields exactly one blob and that blob is at least one cell.
         bool Qualifies(int i) => sweep[i].radiiPx.Length == 1 && TokenSized(sweep[i].radiiPx[0]);
@@ -98,7 +106,7 @@ public sealed class AutoTuner
         {
             int idx = start + len / 2;
             int center = sweep[idx].threshold;
-            int dia = (int)Math.Round(DiaCells(sweep[idx].radiiPx[0]));
+            double dia = Math.Floor(DiaCells(sweep[idx].radiiPx[0]) * 100) / 100.0;
             return new AutoTuneResult
             {
                 Success = true,
@@ -106,7 +114,7 @@ public sealed class AutoTuner
                 MinObjectCells = dia,
                 TokenDiameterCells = dia,
                 BlobCount = 1,
-                Message = $"sensitivity {center}, min size {dia} cell{(dia == 1 ? "" : "s")}"
+                Message = $"sensitivity {center}, min size {dia} cells"
             };
         }
 
@@ -128,9 +136,10 @@ public sealed class AutoTuner
         if (best < 0)
             return new AutoTuneResult { Success = false, Message = "no one-cell token found — place a single token on the map" };
 
-        int minDia = int.MaxValue;
+        double minDia = double.MaxValue;
         foreach (var r in sweep[best].radiiPx)
-            if (TokenSized(r)) minDia = Math.Min(minDia, (int)Math.Round(DiaCells(r)));
+            if (TokenSized(r)) minDia = Math.Min(minDia, DiaCells(r));
+        minDia = Math.Floor(minDia * 100) / 100.0;
         return new AutoTuneResult
         {
             Success = true,
@@ -138,7 +147,7 @@ public sealed class AutoTuner
             MinObjectCells = minDia,
             TokenDiameterCells = minDia,
             BlobCount = bestBlobs,
-            Message = $"sensitivity {sweep[best].threshold}, min size {minDia} cell{(minDia == 1 ? "" : "s")} — {bestBlobs} blobs (place exactly one token)"
+            Message = $"sensitivity {sweep[best].threshold}, min size {minDia} cells — {bestBlobs} blobs (place exactly one token)"
         };
     }
 
@@ -183,7 +192,7 @@ public sealed class AutoTuner
     private static bool HasTokenSizedBlob(double[] radii, float ppc)
     {
         foreach (var r in radii)
-            if ((int)Math.Round(2.0 * r / ppc) >= 1) return true;
+            if (2.0 * r / ppc >= 0.3) return true;
         return false;
     }
 

@@ -23,8 +23,7 @@ public sealed class FigurineDetector : IDisposable
     // Reusable scratch buffers — avoid per-cycle allocations.
     private Mat _warped;
     private Mat _playerMat;
-    private Mat _warpedGray;
-    private Mat _playerGray;
+    private Mat _diffBgr;
     private Mat _diff;
     private Mat _blur;
     private Mat _thresh;
@@ -42,7 +41,11 @@ public sealed class FigurineDetector : IDisposable
 
     /// <summary>Smallest object kept and drawn, measured in grid cells. Only used when
     /// <see cref="PixelsPerCell"/> is set.</summary>
-    public double MinObjectCells { get; set; } = 1.0;
+    public double MinObjectCells { get; set; } = 0.3;
+
+    /// <summary>Largest object kept and drawn, measured in grid cells. Only used when
+    /// <see cref="PixelsPerCell"/> is set. Rejects massive glare reflections.</summary>
+    public double MaxObjectCells { get; set; } = 4.0;
 
     /// <summary>Minimum fill ratio (contour area / enclosing-circle area). A real token is a solid
     /// disc (~0.5–1.0); diffuse glare and registration smears fill their enclosing circle poorly,
@@ -114,21 +117,26 @@ public sealed class FigurineDetector : IDisposable
         EnsureMat(ref _warped, dstH, dstW, MatType.CV_8UC3);
         Cv2.WarpPerspective(cameraFrame, _warped, h, new OpenCvSharp.Size(dstW, dstH));
 
-        EnsureMat(ref _warpedGray, dstH, dstW, MatType.CV_8UC1);
-        EnsureMat(ref _playerGray, dstH, dstW, MatType.CV_8UC1);
-        Cv2.CvtColor(_warped, _warpedGray, ColorConversionCodes.BGR2GRAY);
-        Cv2.CvtColor(_playerMat, _playerGray, ColorConversionCodes.BGR2GRAY);
-
-        // The camera's rendition of the screen is globally brighter/dimmer than the
-        // digital reference; without correcting that offset every pixel reads as a diff.
-        Cv2.MeanStdDev(_warpedGray, out var warpMean, out _);
-        Cv2.MeanStdDev(_playerGray, out var playerMean, out _);
-        double brightnessDelta = playerMean.Val0 - warpMean.Val0;
-        if (Math.Abs(brightnessDelta) > 1)
-            Cv2.Add(_warpedGray, new Scalar(brightnessDelta), _warpedGray);
-
         EnsureMat(ref _diff, dstH, dstW, MatType.CV_8UC1);
-        Cv2.Absdiff(_warpedGray, _playerGray, _diff);
+        EnsureMat(ref _diffBgr, dstH, dstW, MatType.CV_8UC3);
+
+        // Correct global color cast and brightness differences per channel
+        Cv2.MeanStdDev(_warped, out var warpMean, out _);
+        Cv2.MeanStdDev(_playerMat, out var playerMean, out _);
+        double bDelta = playerMean.Val0 - warpMean.Val0;
+        double gDelta = playerMean.Val1 - warpMean.Val1;
+        double rDelta = playerMean.Val2 - warpMean.Val2;
+        Cv2.Add(_warped, new Scalar(bDelta, gDelta, rDelta), _warped);
+
+        // Use Absdiff instead of Subtract to detect BOTH dark tokens (blocking light)
+        // and bright/reflective tokens (reflecting ambient light), relying on morphology to filter glare.
+        Cv2.Absdiff(_playerMat, _warped, _diffBgr);
+
+        // Collapse into a single-channel image taking the MAXIMUM difference across B, G, R.
+        Mat[] channels = Cv2.Split(_diffBgr);
+        Cv2.Max(channels[0], channels[1], _diff);
+        Cv2.Max(_diff, channels[2], _diff);
+        foreach (var c in channels) c.Dispose();
 
         // Low-pass before diff: smooths out the high-frequency appearance differences
         // between a digital map and a photo of it (bloom, screen texture, sub-pixel
@@ -174,11 +182,9 @@ public sealed class FigurineDetector : IDisposable
             if (PixelsPerCell > 0)
             {
                 // Grid scale known. Object size is measured as DIAMETER in cells (a mini occupies
-                // ~one grid square == one cell across), snapped to whole cells; drop anything below
-                // the minimum diameter (sub-token noise).
-                int cells = (int)Math.Round(2.0 * radius / PixelsPerCell);
-                if (cells < MinObjectCells) continue;
-                radius = cells * PixelsPerCell / 2f;
+                // ~one grid square == one cell across). Drop anything below the minimum diameter (sub-token noise).
+                double cells = 2.0 * radius / PixelsPerCell;
+                if (cells < MinObjectCells || cells > MaxObjectCells) continue;
             }
             else
             {
@@ -311,8 +317,7 @@ public sealed class FigurineDetector : IDisposable
         _arucoDict?.Dispose();
         _warped?.Dispose();
         _playerMat?.Dispose();
-        _warpedGray?.Dispose();
-        _playerGray?.Dispose();
+        _diffBgr?.Dispose();
         _diff?.Dispose();
         _blur?.Dispose();
         _thresh?.Dispose();
