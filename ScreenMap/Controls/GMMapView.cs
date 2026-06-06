@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -6,7 +6,7 @@ using System.Windows.Forms;
 using DevExpress.Utils;
 using DevExpress.Utils.Extensions;
 using ScreenMap.Logic;
-using ScreenMap.Logic.Camera;
+using ScreenMap.Vision;
 using ScreenMap.Logic.Tools;
 using ScreenTable.Tools;
 // ReSharper disable LocalizableElement

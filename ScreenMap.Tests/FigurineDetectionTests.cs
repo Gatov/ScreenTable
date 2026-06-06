@@ -3,7 +3,7 @@ using System.Drawing.Drawing2D;
 using NUnit.Framework;
 using OpenCvSharp;
 using OpenCvSharp.Extensions;
-using ScreenMap.Logic.Camera;
+using ScreenMap.Vision;
 
 namespace ScreenMap.Tests;
 

@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using Newtonsoft.Json;
 
-namespace ScreenMap.Logic.Camera;
+namespace ScreenMap.Vision;
 
 public class CameraSettings
 {

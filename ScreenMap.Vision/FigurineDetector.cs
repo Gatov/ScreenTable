@@ -6,7 +6,7 @@ using OpenCvSharp.Aruco;
 using OpenCvSharp.Extensions;
 using Point2f = OpenCvSharp.Point2f;
 
-namespace ScreenMap.Logic.Camera;
+namespace ScreenMap.Vision;
 
 public enum DetectStatus
 {

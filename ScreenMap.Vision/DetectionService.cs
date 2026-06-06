@@ -3,7 +3,7 @@ using System.Drawing;
 using OpenCvSharp.Extensions;
 using Mat = OpenCvSharp.Mat;
 
-namespace ScreenMap.Logic.Camera;
+namespace ScreenMap.Vision;
 
 public sealed class DetectionService : IDisposable
 {

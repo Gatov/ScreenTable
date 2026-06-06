@@ -3,7 +3,7 @@ using OpenCvSharp;
 using OpenCvSharp.Aruco;
 using OpenCvSharp.Extensions;
 
-namespace ScreenMap.Logic.Camera;
+namespace ScreenMap.Vision;
 
 /// <summary>
 /// Generates and caches four corner ArUco fiducial bitmaps (DICT_4X4_50, IDs 0..3)

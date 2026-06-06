@@ -1,6 +1,6 @@
 using System.Drawing;
 
-namespace ScreenMap.Logic.Camera;
+namespace ScreenMap.Vision;
 
 public readonly struct FigurineDetection
 {

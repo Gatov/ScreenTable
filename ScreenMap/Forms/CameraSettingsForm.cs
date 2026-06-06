@@ -1,7 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
-using ScreenMap.Logic.Camera;
+using ScreenMap.Vision;
 
 namespace ScreenMap.Forms;
 

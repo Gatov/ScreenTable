@@ -12,13 +12,11 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="NUnit" Version="4.2.2" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
-    <PackageReference Include="OpenCvSharp4" Version="4.10.0.20240616" />
-    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.10.0.20240616" />
-    <PackageReference Include="OpenCvSharp4.Extensions" Version="4.10.0.20240616" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ScreenMap\ScreenMap.csproj" />
+    <ProjectReference Include="..\ScreenMap.Vision\ScreenMap.Vision.csproj" />
   </ItemGroup>
 
   <ItemGroup>

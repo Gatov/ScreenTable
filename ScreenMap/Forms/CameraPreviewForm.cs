@@ -4,7 +4,7 @@ using System.Windows.Forms;
 using OpenCvSharp;
 using OpenCvSharp.Aruco;
 using OpenCvSharp.Extensions;
-using ScreenMap.Logic.Camera;
+using ScreenMap.Vision;
 
 namespace ScreenMap.Forms;
 

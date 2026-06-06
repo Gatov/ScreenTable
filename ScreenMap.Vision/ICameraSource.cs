@@ -1,7 +1,7 @@
 using System;
 using OpenCvSharp;
 
-namespace ScreenMap.Logic.Camera;
+namespace ScreenMap.Vision;
 
 public interface ICameraSource : IDisposable
 {

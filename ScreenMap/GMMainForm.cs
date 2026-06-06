@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Net;
 using System.Threading;
 using System.Windows.Forms;
 using ScreenMap.Forms;
 using ScreenMap.Logic;
-using ScreenMap.Logic.Camera;
+using ScreenMap.Vision;
 using ScreenMap.Logic.Tools;
 using ScreenTable.Tools;
 

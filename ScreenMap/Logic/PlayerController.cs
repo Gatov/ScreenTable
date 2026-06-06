@@ -3,7 +3,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using ScreenMap.Controls;
-using ScreenMap.Logic.Camera;
+using ScreenMap.Vision;
 using ScreenMap.Logic.Messages;
 
 namespace ScreenMap.Logic;
