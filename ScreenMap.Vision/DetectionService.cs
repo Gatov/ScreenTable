@@ -67,6 +67,7 @@ public sealed class DetectionService : IDisposable
         _detector.MinBlobAreaPx = settings.MinBlobAreaPx;
         _detector.MinObjectCells = settings.MinObjectCells;
         _detector.DiffThreshold = settings.DiffThreshold;
+        _detector.ExpectedCount = settings.ExpectedFigurines;
         ReconcileCamera();
         DetectionsUpdated?.Invoke();
     }
