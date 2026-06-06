@@ -128,7 +128,11 @@ public class TestRunner
             // --- Save annotated frame and reference scene ---
             if (runDir != null)
             {
-                var annotated = BuildAnnotatedImage(capturedFrame, detections, ids, result);
+                Mat baseImageForAnnotation = (detector.Warped != null && !detector.Warped.IsDisposed && !detector.Warped.Empty()) 
+                    ? detector.Warped 
+                    : capturedFrame;
+
+                var annotated = BuildAnnotatedImage(baseImageForAnnotation, detections, ids, result);
                 var annotatedPath = Path.Combine(runDir, "annotated.png");
                 Cv2.ImWrite(annotatedPath, annotated);
                 annotated.Dispose();
@@ -189,8 +193,8 @@ public class TestRunner
         foreach (var det in detections)
         {
             var center = new OpenCvSharp.Point((int)det.Center.X, (int)det.Center.Y);
-            Cv2.Circle(annotated, center, (int)det.Radius, Scalar.LimeGreen, 3);
-            Cv2.Circle(annotated, center, 4, Scalar.Red, -1);
+            // Opaque purple circle
+            Cv2.Circle(annotated, center, (int)det.Radius, new Scalar(255, 0, 128), -1);
         }
 
         return annotated;
