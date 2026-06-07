@@ -42,6 +42,9 @@ public sealed class FigurineDetector : IDisposable
     /// <summary>Returns the camera frame warped to match the reference map geometry.</summary>
     public Mat Warped => _warped;
 
+    /// <summary>Radius of the edge relaxation morph kernel. A value of N masks structural offsets up to N pixels in any direction.</summary>
+    public int EdgeRelaxationRadius { get; set; } = 4;
+
     /// <summary>Smallest object kept and drawn, measured in grid cells. Only used when
     /// <see cref="PixelsPerCell"/> is set.</summary>
     public double MinObjectCells { get; set; } = 0.3;
@@ -140,9 +143,32 @@ public sealed class FigurineDetector : IDisposable
         double rDelta = playerMean.Val2 - warpMean.Val2;
         Cv2.Add(_warped, new Scalar(bDelta, gDelta, rDelta), _warped);
 
-        // Use Absdiff instead of Subtract to detect BOTH dark tokens (blocking light)
-        // and bright/reflective tokens (reflecting ambient light), relying on morphology to filter glare.
-        Cv2.Absdiff(_playerMat, _warped, _diffBgr);
+        // Edge Relaxation: instead of a strict Absdiff, we create a tolerance band.
+        // We Dilate and Erode the reference image to find the max and min allowable brightness
+        // for each pixel. If the camera frame falls within that band, the diff is 0!
+        if (EdgeRelaxationRadius > 0)
+        {
+            int ksize = EdgeRelaxationRadius * 2 + 1;
+            using var relaxKernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(ksize, ksize));
+            
+            using var refDilated = new Mat();
+            using var refEroded = new Mat();
+            Cv2.MorphologyEx(_playerMat, refDilated, MorphTypes.Dilate, relaxKernel);
+            Cv2.MorphologyEx(_playerMat, refEroded, MorphTypes.Erode, relaxKernel);
+
+            using var diffHigh = new Mat();
+            using var diffLow = new Mat();
+            // C - ref_dilated: positive if camera is BRIGHTER than the maximum allowed brightness
+            Cv2.Subtract(_warped, refDilated, diffHigh);
+            // ref_eroded - C: positive if camera is DARKER than the minimum allowed brightness
+            Cv2.Subtract(refEroded, _warped, diffLow);
+
+            Cv2.Add(diffHigh, diffLow, _diffBgr);
+        }
+        else
+        {
+            Cv2.Absdiff(_playerMat, _warped, _diffBgr);
+        }
 
         // Collapse into a single-channel image taking the MAXIMUM difference across B, G, R.
         Mat[] channels = Cv2.Split(_diffBgr);

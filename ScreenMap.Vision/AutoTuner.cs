@@ -19,6 +19,9 @@ public sealed class AutoTuneResult
     public int BlobCount;
     /// <summary>Diameter (in cells) of the token the pick was based on.</summary>
     public double TokenDiameterCells;
+    public double LensDistortionK1;
+    public double LensDistortionCx;
+    public double LensDistortionCy;
     public string Message = "";
 }
 
@@ -43,45 +46,86 @@ public sealed class AutoTuner
         if (cameraFrame == null || cameraFrame.Empty() || referenceView == null)
             return new AutoTuneResult { Success = false, Message = "no camera frame or reference view" };
 
-        var sweep = new List<(int threshold, double[] radiiPx)>();
-        // The tuner clamps its final minArea recommendation to 200px at the lowest,
-        // so we filter out anything smaller than 200px during the sweep to prevent 
-        // tiny high-contrast noise specks from hijacking the 'single blob' plateau.
+        double cx = cameraFrame.Width / 2.0;
+        double cy = cameraFrame.Height / 2.0;
+        double fx = cameraFrame.Width; // Approximate
+        double fy = cameraFrame.Width;
+        using var K = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
+        K.Set<double>(0, 0, fx);
+        K.Set<double>(1, 1, fy);
+        K.Set<double>(0, 2, cx);
+        K.Set<double>(1, 2, cy);
+
+        var bestSweep = new List<(int threshold, double[] radiiPx)>();
+        double bestK1 = 0;
+        int minTotalBlobs = int.MaxValue;
+
+        // The tuner clamps its final minArea recommendation to 200px at the lowest
         using var detector = new FigurineDetector { MinBlobAreaPx = 200 };
-        bool anyOk = false;
-        for (int t = MinThreshold; t <= MaxThreshold; t += ThresholdStep)
+
+        for (double k1 = -0.15; k1 <= 0.151; k1 += 0.05)
         {
-            detector.DiffThreshold = t;
-            var status = detector.Detect(cameraFrame, referenceView, out var dets);
-            if (status != DetectStatus.Ok) continue;
-            anyOk = true;
-            var validRadii = new System.Collections.Generic.List<double>();
-            for (int i = 0; i < dets.Length; i++)
+            using Mat undistortedFrame = new Mat();
+            if (Math.Abs(k1) > 0.001)
             {
-                if (pixelsPerCell > 0)
-                {
-                    double cells = 2.0 * dets[i].Radius / pixelsPerCell;
-                    if (cells > 4.5) 
-                    {
-                        // Filter out massive glare by invalidating this threshold completely.
-                        // If it produces screen-sized blobs, it's far too sensitive.
-                        validRadii.Clear();
-                        break;
-                    }
-                }
-                validRadii.Add(dets[i].Radius);
+                using var distCoeffs = Mat.Zeros(1, 5, MatType.CV_64FC1).ToMat();
+                distCoeffs.Set<double>(0, 0, k1);
+                Cv2.Undistort(cameraFrame, undistortedFrame, K, distCoeffs);
             }
-            sweep.Add((t, validRadii.ToArray()));
+            else
+            {
+                cameraFrame.CopyTo(undistortedFrame);
+            }
+
+            var currentSweep = new List<(int threshold, double[] radiiPx)>();
+            int currentTotalBlobs = 0;
+            bool anyOk = false;
+
+            for (int t = MinThreshold; t <= MaxThreshold; t += ThresholdStep)
+            {
+                detector.DiffThreshold = t;
+                var status = detector.Detect(undistortedFrame, referenceView, out var dets);
+                if (status != DetectStatus.Ok) continue;
+                anyOk = true;
+                
+                var validRadii = new System.Collections.Generic.List<double>();
+                for (int i = 0; i < dets.Length; i++)
+                {
+                    if (pixelsPerCell > 0)
+                    {
+                        double cells = 2.0 * dets[i].Radius / pixelsPerCell;
+                        if (cells > 4.5) 
+                        {
+                            validRadii.Clear();
+                            break;
+                        }
+                    }
+                    validRadii.Add(dets[i].Radius);
+                }
+                currentSweep.Add((t, validRadii.ToArray()));
+                currentTotalBlobs += validRadii.Count;
+            }
+
+            if (anyOk && currentTotalBlobs < minTotalBlobs)
+            {
+                minTotalBlobs = currentTotalBlobs;
+                bestK1 = k1;
+                bestSweep = currentSweep;
+            }
         }
 
-        if (!anyOk)
+        if (bestSweep.Count == 0)
             return new AutoTuneResult
             {
                 Success = false,
                 Message = "markers not found — aim the camera so all four corners are visible"
             };
 
-        return SelectThreshold(sweep, pixelsPerCell);
+        var result = SelectThreshold(bestSweep, pixelsPerCell);
+        result.LensDistortionK1 = bestK1;
+        result.LensDistortionCx = cx;
+        result.LensDistortionCy = cy;
+        return result;
     }
 
     /// <summary>Pure pick step: from the blob radii each threshold produced, choose the sensitivity

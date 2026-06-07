@@ -27,6 +27,15 @@ public class DetectionResult
     /// <summary>Number of figurine blobs detected in the diff.</summary>
     public int FigurineCount { get; set; }
 
+    /// <summary>The lens distortion coefficient calculated by AutoTuner.</summary>
+    public double LensDistortionK1 { get; set; }
+
+    /// <summary>Number of raw blobs detected before distortion fix.</summary>
+    public int BlobsWithoutDistortionFix { get; set; }
+
+    /// <summary>Number of raw blobs detected after distortion fix.</summary>
+    public int BlobsWithDistortionFix { get; set; }
+
     /// <summary>Per-figurine detection details.</summary>
     public FigurineInfo[] Figurines { get; set; } = Array.Empty<FigurineInfo>();
 

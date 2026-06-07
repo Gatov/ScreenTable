@@ -126,12 +126,46 @@ public class TestRunner
         float simulatedPpc = capturedFrame.Width / 30f;
         var tuneResult = tuner.Tune(capturedFrame, referenceScene, pixelsPerCell: simulatedPpc);
         Console.Error.WriteLine($"    [AutoTuner] Success: {tuneResult.Success}, Thresh: {tuneResult.DiffThreshold}, " +
-                                $"Blobs: {tuneResult.BlobCount}, MinCells: {tuneResult.MinObjectCells:F1}, Msg: {tuneResult.Message}");
+                                $"Blobs: {tuneResult.BlobCount}, MinCells: {tuneResult.MinObjectCells:F1}, k1: {tuneResult.LensDistortionK1:F2}, Msg: {tuneResult.Message}");
+
+        Mat processingFrame = capturedFrame;
+        Mat undistortedFrame = null;
+        if (tuneResult.Success && Math.Abs(tuneResult.LensDistortionK1) > 0.001)
+        {
+            double fx = capturedFrame.Width;
+            double fy = capturedFrame.Width;
+            using var K = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
+            K.Set<double>(0, 0, fx);
+            K.Set<double>(1, 1, fy);
+            K.Set<double>(0, 2, tuneResult.LensDistortionCx);
+            K.Set<double>(1, 2, tuneResult.LensDistortionCy);
+
+            using var distCoeffs = Mat.Zeros(1, 5, MatType.CV_64FC1).ToMat();
+            distCoeffs.Set<double>(0, 0, tuneResult.LensDistortionK1);
+            
+            undistortedFrame = new Mat();
+            Cv2.Undistort(capturedFrame, undistortedFrame, K, distCoeffs);
+            processingFrame = undistortedFrame;
+        }
+
+        result.LensDistortionK1 = tuneResult.LensDistortionK1;
+
+        // --- Run detection on raw frame for diagnostics ---
+        if (tuneResult.Success)
+        {
+            using var rawDetector = new FigurineDetector { ProduceCrops = false };
+            rawDetector.DiffThreshold = tuneResult.DiffThreshold;
+            rawDetector.MinObjectCells = tuneResult.MinObjectCells;
+            rawDetector.PixelsPerCell = simulatedPpc;
+            rawDetector.ExpectedCount = tuneResult.BlobCount;
+            rawDetector.Detect(capturedFrame, referenceScene, out _);
+            result.BlobsWithoutDistortionFix = rawDetector.LastContourCount;
+        }
 
         // --- Count markers found (for diagnostics) ---
         using var dict = CvAruco.GetPredefinedDictionary(ArucoMarkers.DictName);
         var detParams = ArucoMarkers.CreateDetectorParameters();
-        CvAruco.DetectMarkers(capturedFrame, dict, out _, out var ids, detParams, out _);
+        CvAruco.DetectMarkers(processingFrame, dict, out _, out var ids, detParams, out _);
         result.MarkerCount = ids?.Length ?? 0;
         result.MarkersDetected = result.MarkerCount >= ArucoMarkers.MarkerCount;
 
@@ -146,8 +180,10 @@ public class TestRunner
         }
         
         var sw = Stopwatch.StartNew();
-        var status = detector.Detect(capturedFrame, referenceScene, out var detections);
+        var status = detector.Detect(processingFrame, referenceScene, out var detections);
         sw.Stop();
+        
+        result.BlobsWithDistortionFix = detector.LastContourCount;
 
         result.ProcessingMs = sw.Elapsed.TotalMilliseconds;
         result.DetectStatus = status.ToString();
@@ -170,7 +206,7 @@ public class TestRunner
 
             Mat baseImageForAnnotation = (detector.Warped != null && !detector.Warped.IsDisposed && !detector.Warped.Empty()) 
                 ? detector.Warped 
-                : capturedFrame;
+                : processingFrame;
 
             var annotated = BuildAnnotatedImage(baseImageForAnnotation, detections, ids, result);
             var annotatedPath = Path.Combine(runDir, "annotated.png");
@@ -178,30 +214,12 @@ public class TestRunner
             annotated.Dispose();
             result.AnnotatedFramePath = Path.GetRelativePath(_outputDir, annotatedPath);
 
-            using var annotatedRef = (Bitmap)referenceScene.Clone();
-            using (var g = Graphics.FromImage(annotatedRef))
-            {
-                g.SmoothingMode = SmoothingMode.HighQuality;
-                if (expectedFigurine.HasValue)
-                {
-                    using var pinkBrush = new SolidBrush(Color.FromArgb(128, 255, 20, 147)); // DeepPink 50%
-                    float r = expectedRadius;
-                    g.FillEllipse(pinkBrush, expectedFigurine.Value.X - r, expectedFigurine.Value.Y - r, r * 2, r * 2);
-                }
-                if (detections != null)
-                {
-                    using var blueBrush = new SolidBrush(Color.FromArgb(128, 0, 0, 255)); // Blue 50%
-                    foreach (var d in detections)
-                    {
-                        g.FillEllipse(blueBrush, d.Center.X - d.Radius, d.Center.Y - d.Radius, d.Radius * 2, d.Radius * 2);
-                    }
-                }
-            }
             var refPath = Path.Combine(runDir, "reference-scene.png");
-            annotatedRef.Save(refPath, ImageFormat.Png);
+            referenceScene.Save(refPath, ImageFormat.Png);
             result.ReferenceScenePath = Path.GetRelativePath(_outputDir, refPath);
         }
 
+        undistortedFrame?.Dispose();
         return result;
     }
 
