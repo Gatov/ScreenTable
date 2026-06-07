@@ -19,6 +19,9 @@ public class CameraSettings
     /// map grid scale is known; auto-adjust sets this to the placed token's size.</summary>
     public double MinObjectCells { get; set; } = 1.0;
     public int DiffThreshold { get; set; } = 70;
+    /// <summary>Fisheye/barrel lens distortion coefficient (OpenCV k1). 0 = no correction. Set by
+    /// Auto-distortion or the manual slider; applied to every detection frame before warping.</summary>
+    public double LensDistortionK1 { get; set; } = 0.0;
     /// <summary>Expected number of figurines on the table. The detector keeps only this many of
     /// the strongest detections; 0 means auto-guess the count. Filters fakes/flares per map.</summary>
     public int ExpectedFigurines { get; set; } = 0;

@@ -67,18 +67,49 @@ public sealed class DetectionService : IDisposable
         _detector.MinBlobAreaPx = settings.MinBlobAreaPx;
         _detector.MinObjectCells = settings.MinObjectCells;
         _detector.DiffThreshold = settings.DiffThreshold;
+        _detector.LensDistortionK1 = settings.LensDistortionK1;
         _detector.ExpectedCount = settings.ExpectedFigurines;
         ReconcileCamera();
         DetectionsUpdated?.Invoke();
     }
 
     /// <summary>
-    /// Runs the auto-adjust sweep against the latest camera frame: the user has placed a single
-    /// minimal-size (one-cell) token on the map. Finds the sensitivity (and min size) that
-    /// isolates it, writes the result into the shared settings, applies it to the live detector,
-    /// and persists. Returns the outcome for the caller to display. Call on the UI thread.
+    /// Runs the lens-distortion sweep against the latest camera frame: the user has cleared the
+    /// table so only the map and its four markers show. Finds the k1 that best straightens the map,
+    /// writes it into the shared settings, applies it to the live detector, and persists. Returns
+    /// the outcome for the caller to display. Call on the UI thread.
     /// </summary>
-    public AutoTuneResult AutoTune()
+    public AutoTuneResult AutoTuneDistortion()
+        => RunTune((tuner, frame, view, ppc) => tuner.TuneDistortion(frame, view, ppc), (result) =>
+        {
+            _settings.LensDistortionK1 = result.LensDistortionK1;
+            _detector.LensDistortionK1 = _settings.LensDistortionK1;
+        });
+
+    /// <summary>
+    /// Runs the sensitivity sweep against the latest camera frame: the user has placed a single
+    /// minimal-size (one-cell) token on the map. Undistorts using the currently stored
+    /// <see cref="CameraSettings.LensDistortionK1"/>, finds the sensitivity (and min size) that
+    /// isolate the token, writes the result into the shared settings, applies it to the live
+    /// detector, and persists. Returns the outcome for the caller to display. Call on the UI thread.
+    /// </summary>
+    public AutoTuneResult AutoTuneSensitivity()
+        => RunTune((tuner, frame, view, ppc) =>
+            tuner.TuneSensitivity(frame, view, ppc, _settings.LensDistortionK1), (result) =>
+        {
+            _settings.DiffThreshold = result.DiffThreshold;
+            if (result.MinObjectCells > 0) _settings.MinObjectCells = result.MinObjectCells;
+            else _settings.MinBlobAreaPx = result.MinBlobAreaPx;
+            _detector.DiffThreshold = _settings.DiffThreshold;
+            _detector.MinObjectCells = _settings.MinObjectCells;
+            _detector.MinBlobAreaPx = _settings.MinBlobAreaPx;
+        });
+
+    // Shared plumbing for the two auto-tune buttons: grab a frame + reference view, run the given
+    // sweep, and on success let the caller commit the result into settings/detector before saving.
+    private AutoTuneResult RunTune(
+        Func<AutoTuner, Mat, Bitmap, float, AutoTuneResult> sweep,
+        Action<AutoTuneResult> commit)
     {
         if (_settings == null)
             return new AutoTuneResult { Success = false, Message = "camera not configured yet" };
@@ -92,15 +123,10 @@ public sealed class DetectionService : IDisposable
                 return new AutoTuneResult { Success = false, Message = "no map loaded" };
 
             float ppc = _getPixelsPerCell?.Invoke(_playerViewSize) ?? 0f;
-            var result = new AutoTuner().Tune(frame, view, ppc);
+            var result = sweep(new AutoTuner(), frame, view, ppc);
             if (!result.Success) return result;
 
-            _settings.DiffThreshold = result.DiffThreshold;
-            if (result.MinObjectCells > 0) _settings.MinObjectCells = result.MinObjectCells;
-            else _settings.MinBlobAreaPx = result.MinBlobAreaPx;
-            _detector.DiffThreshold = _settings.DiffThreshold;
-            _detector.MinObjectCells = _settings.MinObjectCells;
-            _detector.MinBlobAreaPx = _settings.MinBlobAreaPx;
+            commit(result);
             _settings.Save();
             DetectionsUpdated?.Invoke();
             return result;

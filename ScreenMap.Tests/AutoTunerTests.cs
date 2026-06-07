@@ -160,6 +160,58 @@ public class AutoTunerTests
     }
 
     [Test]
+    public void TuneDistortion_RealPair_ReturnsK1InRange()
+    {
+        var (frame, view) = LoadCapture("20260531-185301");
+        using (frame)
+        using (view)
+        {
+            var r = new AutoTuner().TuneDistortion(frame, view, pixelsPerCell: 0f);
+
+            Assert.That(r.Success, Is.True, "markers visible -> distortion sweep succeeds");
+            Assert.That(r.LensDistortionK1, Is.InRange(0.0, 0.2), "k1 stays within the swept range");
+            // Distortion tune does not pick a sensitivity.
+            Assert.That(r.DiffThreshold, Is.EqualTo(0));
+        }
+    }
+
+    [Test]
+    public void TuneSensitivity_RealPair_RespectsPassedK1()
+    {
+        var (frame, view) = LoadCapture("20260531-185301");
+        using (frame)
+        using (view)
+        {
+            using var probe = new FigurineDetector { DiffThreshold = 80, MinBlobAreaPx = 1500 };
+            probe.Detect(frame, view, out var dets);
+            float ppc = dets[0].Radius * 2f;
+
+            const double k1 = 0.05;
+            var r = new AutoTuner().TuneSensitivity(frame, view, ppc, k1);
+
+            Assert.That(r.Success, Is.True);
+            Assert.That(r.LensDistortionK1, Is.EqualTo(k1), "echoes the k1 it was told to use");
+            Assert.That(r.DiffThreshold, Is.InRange(AutoTuner.MinThreshold, AutoTuner.MaxThreshold));
+        }
+    }
+
+    [Test]
+    public void Detector_NonZeroK1_UndistortsAndStillDetects()
+    {
+        var (frame, view) = LoadCapture("20260531-185301");
+        using (frame)
+        using (view)
+        {
+            // A mild lens correction must not break the marker/warp pipeline.
+            using var tuned = new FigurineDetector { DiffThreshold = 80, MinBlobAreaPx = 1500, LensDistortionK1 = 0.05 };
+            var status = tuned.Detect(frame, view, out var dets);
+
+            Assert.That(status, Is.EqualTo(DetectStatus.Ok), "markers still found after undistortion");
+            Assert.That(dets.Length, Is.GreaterThanOrEqualTo(1), "the token survives the undistort path");
+        }
+    }
+
+    [Test]
     public void Tune_MockFigurine_ReportsSuccess()
     {
         var size = new System.Drawing.Size(960, 540);

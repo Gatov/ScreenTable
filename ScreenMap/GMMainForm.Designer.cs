@@ -54,7 +54,8 @@ namespace ScreenMap
             barButtonItemShare = new DevExpress.XtraBars.BarButtonItem();
             barButtonItemCamera = new DevExpress.XtraBars.BarButtonItem();
             barButtonItemPreview = new DevExpress.XtraBars.BarButtonItem();
-            barButtonItemAutoTune = new DevExpress.XtraBars.BarButtonItem();
+            barButtonItemAutoDistortion = new DevExpress.XtraBars.BarButtonItem();
+            barButtonItemAutoSensitivity = new DevExpress.XtraBars.BarButtonItem();
             barStaticItemCameraStatus = new DevExpress.XtraBars.BarStaticItem();
             barEditItemMinis = new DevExpress.XtraBars.BarEditItem();
             repositoryItemSpinEditMinis = new DevExpress.XtraEditors.Repository.RepositoryItemSpinEdit();
@@ -91,8 +92,8 @@ namespace ScreenMap
             barManager1.DockControls.Add(barDockControlLeft);
             barManager1.DockControls.Add(barDockControlRight);
             barManager1.Form = this;
-            barManager1.Items.AddRange(new DevExpress.XtraBars.BarItem[] { barCheckItemCalibrate, barButtonItemSave, barListItemBrushes, barCheckItemMarks, barStaticItemHint, barCheckItemGrid, barButtonItemShare, barButtonItemCamera, barButtonItemPreview, barStaticItemCameraStatus, barEditItemMinis, barButtonItemAutoTune });
-            barManager1.MaxItemId = 14;
+            barManager1.Items.AddRange(new DevExpress.XtraBars.BarItem[] { barCheckItemCalibrate, barButtonItemSave, barListItemBrushes, barCheckItemMarks, barStaticItemHint, barCheckItemGrid, barButtonItemShare, barButtonItemCamera, barButtonItemPreview, barStaticItemCameraStatus, barEditItemMinis, barButtonItemAutoDistortion, barButtonItemAutoSensitivity });
+            barManager1.MaxItemId = 15;
             barManager1.RepositoryItems.AddRange(new DevExpress.XtraEditors.Repository.RepositoryItem[] { repositoryItemSpinEditMinis });
             barManager1.StatusBar = bar3;
             // 
@@ -102,7 +103,7 @@ namespace ScreenMap
             bar1.DockCol = 0;
             bar1.DockRow = 0;
             bar1.DockStyle = DevExpress.XtraBars.BarDockStyle.Top;
-            bar1.LinksPersistInfo.AddRange(new DevExpress.XtraBars.LinkPersistInfo[] { new DevExpress.XtraBars.LinkPersistInfo(barButtonItemSave), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemCalibrate, true), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemMarks), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemGrid, true), new DevExpress.XtraBars.LinkPersistInfo(barListItemBrushes, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemShare, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemCamera, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemPreview), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemAutoTune), new DevExpress.XtraBars.LinkPersistInfo(barEditItemMinis, true) });
+            bar1.LinksPersistInfo.AddRange(new DevExpress.XtraBars.LinkPersistInfo[] { new DevExpress.XtraBars.LinkPersistInfo(barButtonItemSave), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemCalibrate, true), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemMarks), new DevExpress.XtraBars.LinkPersistInfo(barCheckItemGrid, true), new DevExpress.XtraBars.LinkPersistInfo(barListItemBrushes, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemShare, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemCamera, true), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemPreview), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemAutoDistortion), new DevExpress.XtraBars.LinkPersistInfo(barButtonItemAutoSensitivity), new DevExpress.XtraBars.LinkPersistInfo(barEditItemMinis, true) });
             bar1.Text = "Tools";
             // 
             // barButtonItemSave
@@ -175,12 +176,19 @@ namespace ScreenMap
             barButtonItemPreview.Name = "barButtonItemPreview";
             barButtonItemPreview.ItemClick += barButtonItemPreview_ItemClick;
             //
-            // barButtonItemAutoTune
+            // barButtonItemAutoDistortion
             //
-            barButtonItemAutoTune.Caption = "Auto-tune";
-            barButtonItemAutoTune.Id = 13;
-            barButtonItemAutoTune.Name = "barButtonItemAutoTune";
-            barButtonItemAutoTune.ItemClick += barButtonItemAutoTune_ItemClick;
+            barButtonItemAutoDistortion.Caption = "Auto-distortion";
+            barButtonItemAutoDistortion.Id = 13;
+            barButtonItemAutoDistortion.Name = "barButtonItemAutoDistortion";
+            barButtonItemAutoDistortion.ItemClick += barButtonItemAutoDistortion_ItemClick;
+            //
+            // barButtonItemAutoSensitivity
+            //
+            barButtonItemAutoSensitivity.Caption = "Auto-sensitivity";
+            barButtonItemAutoSensitivity.Id = 14;
+            barButtonItemAutoSensitivity.Name = "barButtonItemAutoSensitivity";
+            barButtonItemAutoSensitivity.ItemClick += barButtonItemAutoSensitivity_ItemClick;
             //
             // barStaticItemCameraStatus
             //
@@ -326,7 +334,8 @@ namespace ScreenMap
         private DevExpress.XtraBars.BarButtonItem barButtonItemShare;
         private DevExpress.XtraBars.BarButtonItem barButtonItemCamera;
         private DevExpress.XtraBars.BarButtonItem barButtonItemPreview;
-        private DevExpress.XtraBars.BarButtonItem barButtonItemAutoTune;
+        private DevExpress.XtraBars.BarButtonItem barButtonItemAutoDistortion;
+        private DevExpress.XtraBars.BarButtonItem barButtonItemAutoSensitivity;
         private DevExpress.XtraBars.BarStaticItem barStaticItemCameraStatus;
         private DevExpress.XtraBars.BarEditItem barEditItemMinis;
         private DevExpress.XtraEditors.Repository.RepositoryItemSpinEdit repositoryItemSpinEditMinis;

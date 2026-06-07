@@ -153,21 +153,38 @@ namespace ScreenMap
             }
         }
 
-        private void barButtonItemAutoTune_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        private void barButtonItemAutoDistortion_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+        {
+            var prompt = MessageBox.Show(this,
+                "Clear all tokens so only the map and its four markers are visible, then click OK.\n\n" +
+                "Auto-distortion will find the lens correction that best straightens the map.",
+                "Auto-distortion", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
+            if (prompt != DialogResult.OK) return;
+
+            RunAutoTune(() => _detectionService.AutoTuneDistortion(), "Auto-distortion");
+        }
+
+        private void barButtonItemAutoSensitivity_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
         {
             var prompt = MessageBox.Show(this,
                 "Place ONE token (the smallest you use) on the map and clear everything else, " +
-                "then click OK.\n\nAuto-tune will find the sensitivity and minimum size that " +
+                "then click OK.\n\nAuto-sensitivity will find the sensitivity and minimum size that " +
                 "isolate just that token.",
-                "Auto-tune detection", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
+                "Auto-sensitivity", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
             if (prompt != DialogResult.OK) return;
 
+            RunAutoTune(() => _detectionService.AutoTuneSensitivity(), "Auto-sensitivity");
+        }
+
+        // Shared wait-cursor + failure-reporting wrapper for the two one-shot auto-tune buttons.
+        private void RunAutoTune(Func<AutoTuneResult> tune, string title)
+        {
             Cursor = Cursors.WaitCursor;
             try
             {
-                var result = _detectionService.AutoTune();
+                var result = tune();
                 if (!result.Success)
-                    MessageBox.Show(this, result.Message, "Auto-tune",
+                    MessageBox.Show(this, result.Message, title,
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally

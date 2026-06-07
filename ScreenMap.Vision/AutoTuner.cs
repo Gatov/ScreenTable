@@ -38,94 +38,147 @@ public sealed class AutoTuner
     public const int MaxThreshold = 150;
     public const int ThresholdStep = 5;
 
-    /// <summary>Captures-and-sweeps: runs the detector across the threshold range on a single
-    /// frame and returns the recommended parameters. Uses its own detector instance so it never
-    /// races the live detector. Hard-aborts when the markers can't be found at any threshold.</summary>
-    public AutoTuneResult Tune(Mat cameraFrame, Bitmap referenceView, float pixelsPerCell)
+    /// <summary>Distortion sweep: tries each lens k1 over a single frame and returns the one that
+    /// minimizes the total raw-blob confidence energy (a straightened map produces the fewest
+    /// spurious diffs). Does NOT pick a sensitivity — that is <see cref="TuneSensitivity"/>. Uses
+    /// its own detector instance so it never races the live detector. Hard-aborts when the markers
+    /// can't be found at any threshold/k1.</summary>
+    public AutoTuneResult TuneDistortion(Mat cameraFrame, Bitmap referenceView, float pixelsPerCell)
     {
         if (cameraFrame == null || cameraFrame.Empty() || referenceView == null)
             return new AutoTuneResult { Success = false, Message = "no camera frame or reference view" };
 
         double cx = cameraFrame.Width / 2.0;
         double cy = cameraFrame.Height / 2.0;
-        double fx = cameraFrame.Width; // Approximate
-        double fy = cameraFrame.Width;
-        using var K = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
-        K.Set<double>(0, 0, fx);
-        K.Set<double>(1, 1, fy);
-        K.Set<double>(0, 2, cx);
-        K.Set<double>(1, 2, cy);
 
-        var bestSweep = new List<(int threshold, double[] radiiPx)>();
         double bestK1 = 0;
         double minTotalConfidence = double.MaxValue;
+        bool anyK1Ok = false;
 
         // The tuner clamps its final minArea recommendation to 200px at the lowest
         using var detector = new FigurineDetector { MinBlobAreaPx = 200 };
+        using Mat undistortedFrame = new Mat();
 
         for (double k1 = 0.0; k1 <= 0.201; k1 += 0.025)
         {
-            using Mat undistortedFrame = new Mat();
             if (Math.Abs(k1) > 0.001)
-            {
-                using var distCoeffs = Mat.Zeros(1, 5, MatType.CV_64FC1).ToMat();
-                distCoeffs.Set<double>(0, 0, k1);
-                Cv2.Undistort(cameraFrame, undistortedFrame, K, distCoeffs);
-            }
+                FigurineDetector.Undistort(cameraFrame, undistortedFrame, k1);
             else
-            {
                 cameraFrame.CopyTo(undistortedFrame);
-            }
 
-            var currentSweep = new List<(int threshold, double[] radiiPx)>();
-            double currentTotalConfidence = 0;
-            bool anyOk = false;
+            RunThresholdSweep(detector, undistortedFrame, referenceView, pixelsPerCell,
+                out double totalConfidence, out bool anyOk);
 
-            for (int t = MinThreshold; t <= MaxThreshold; t += ThresholdStep)
+            if (anyOk && totalConfidence < minTotalConfidence)
             {
-                detector.DiffThreshold = t;
-                var status = detector.Detect(undistortedFrame, referenceView, out var dets);
-                if (status != DetectStatus.Ok) continue;
-                anyOk = true;
-                
-                var validRadii = new System.Collections.Generic.List<double>();
-                for (int i = 0; i < dets.Length; i++)
-                {
-                    if (pixelsPerCell > 0)
-                    {
-                        double cells = 2.0 * dets[i].Radius / pixelsPerCell;
-                        if (cells > 4.5) 
-                        {
-                            validRadii.Clear();
-                            break;
-                        }
-                    }
-                    validRadii.Add(dets[i].Radius);
-                }
-                currentSweep.Add((t, validRadii.ToArray()));
-                currentTotalConfidence += detector.LastTotalConfidence;
-            }
-
-            if (anyOk && currentTotalConfidence < minTotalConfidence)
-            {
-                minTotalConfidence = currentTotalConfidence;
+                minTotalConfidence = totalConfidence;
                 bestK1 = k1;
-                bestSweep = currentSweep;
+                anyK1Ok = true;
             }
         }
 
-        if (bestSweep.Count == 0)
+        if (!anyK1Ok)
             return new AutoTuneResult
             {
                 Success = false,
                 Message = "markers not found — aim the camera so all four corners are visible"
             };
 
-        var result = SelectThreshold(bestSweep, pixelsPerCell);
-        result.LensDistortionK1 = bestK1;
-        result.LensDistortionCx = cx;
-        result.LensDistortionCy = cy;
+        return new AutoTuneResult
+        {
+            Success = true,
+            LensDistortionK1 = bestK1,
+            LensDistortionCx = cx,
+            LensDistortionCy = cy,
+            Message = $"lens distortion k1 = {bestK1:F3}"
+        };
+    }
+
+    /// <summary>Sensitivity sweep: undistorts the frame ONCE with the supplied <paramref name="k1"/>
+    /// (the stored / chosen lens coefficient), sweeps the diff threshold, and picks the sensitivity
+    /// + min size that isolate the single placed token via <see cref="SelectThreshold"/>. Hard-aborts
+    /// when the markers can't be found at any threshold.</summary>
+    public AutoTuneResult TuneSensitivity(Mat cameraFrame, Bitmap referenceView,
+        float pixelsPerCell, double k1)
+    {
+        if (cameraFrame == null || cameraFrame.Empty() || referenceView == null)
+            return new AutoTuneResult { Success = false, Message = "no camera frame or reference view" };
+
+        using var detector = new FigurineDetector { MinBlobAreaPx = 200 };
+        using Mat undistortedFrame = new Mat();
+        if (Math.Abs(k1) > 0.001)
+            FigurineDetector.Undistort(cameraFrame, undistortedFrame, k1);
+        else
+            cameraFrame.CopyTo(undistortedFrame);
+
+        var sweep = RunThresholdSweep(detector, undistortedFrame, referenceView, pixelsPerCell,
+            out _, out bool anyOk);
+
+        if (!anyOk || sweep.Count == 0)
+            return new AutoTuneResult
+            {
+                Success = false,
+                Message = "markers not found — aim the camera so all four corners are visible"
+            };
+
+        var result = SelectThreshold(sweep, pixelsPerCell);
+        result.LensDistortionK1 = k1;
         return result;
+    }
+
+    /// <summary>Convenience: run the distortion sweep, then the sensitivity sweep with the chosen
+    /// k1, returning a single result carrying both. Kept for callers/tests that want the combined
+    /// behavior; the UI drives <see cref="TuneDistortion"/> and <see cref="TuneSensitivity"/>
+    /// independently.</summary>
+    public AutoTuneResult Tune(Mat cameraFrame, Bitmap referenceView, float pixelsPerCell)
+    {
+        var d = TuneDistortion(cameraFrame, referenceView, pixelsPerCell);
+        if (!d.Success) return d;
+        var s = TuneSensitivity(cameraFrame, referenceView, pixelsPerCell, d.LensDistortionK1);
+        if (!s.Success) return s;
+        s.LensDistortionK1 = d.LensDistortionK1;
+        s.LensDistortionCx = d.LensDistortionCx;
+        s.LensDistortionCy = d.LensDistortionCy;
+        return s;
+    }
+
+    /// <summary>Runs the detector across the threshold range on one (already-undistorted) frame.
+    /// Returns the per-threshold blob radii, the summed raw confidence energy, and whether the
+    /// markers were found at any threshold. Token-implausible frames (a blob &gt; 4.5 cells across)
+    /// contribute an empty radii list at that threshold.</summary>
+    private static List<(int threshold, double[] radiiPx)> RunThresholdSweep(
+        FigurineDetector detector, Mat frame, Bitmap referenceView, float pixelsPerCell,
+        out double totalConfidence, out bool anyOk)
+    {
+        var sweep = new List<(int threshold, double[] radiiPx)>();
+        totalConfidence = 0;
+        anyOk = false;
+
+        for (int t = MinThreshold; t <= MaxThreshold; t += ThresholdStep)
+        {
+            detector.DiffThreshold = t;
+            var status = detector.Detect(frame, referenceView, out var dets);
+            if (status != DetectStatus.Ok) continue;
+            anyOk = true;
+
+            var validRadii = new List<double>();
+            for (int i = 0; i < dets.Length; i++)
+            {
+                if (pixelsPerCell > 0)
+                {
+                    double cells = 2.0 * dets[i].Radius / pixelsPerCell;
+                    if (cells > 4.5)
+                    {
+                        validRadii.Clear();
+                        break;
+                    }
+                }
+                validRadii.Add(dets[i].Radius);
+            }
+            sweep.Add((t, validRadii.ToArray()));
+            totalConfidence += detector.LastTotalConfidence;
+        }
+        return sweep;
     }
 
     /// <summary>Pure pick step: from the blob radii each threshold produced, choose the sensitivity

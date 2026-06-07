@@ -29,6 +29,7 @@ public sealed class FigurineDetector : IDisposable
     private Mat _thresh;
     private Mat _morphed;
     private Mat _colorDist; // per-pixel BGR diff-vector magnitude (CV_32FC1), reused each cycle.
+    private Mat _undistorted; // lens-corrected copy of the camera frame, reused each cycle.
 
     /// <summary>Min blob size in pixels — used only on the no-grid fallback (see
     /// <see cref="PixelsPerCell"/>).</summary>
@@ -67,6 +68,10 @@ public sealed class FigurineDetector : IDisposable
     /// texture / screen-photo appearance noise stays below it while an object clears it.</summary>
     public int DiffThreshold { get; set; } = 70;
 
+    /// <summary>Fisheye/barrel correction coefficient (OpenCV k1) applied to the camera frame
+    /// before marker detection and warping. 0 (|k1| &lt;= 0.001) disables it.</summary>
+    public double LensDistortionK1 { get; set; } = 0.0;
+
     /// <summary>When set, <see cref="Detect"/> also crops each detected figurine out of the
     /// aligned frame into <see cref="LastCrops"/>. Off by default so the overlay-only path
     /// stays allocation-free.</summary>
@@ -100,7 +105,17 @@ public sealed class FigurineDetector : IDisposable
         DisposeCrops();
         if (cameraFrame == null || cameraFrame.Empty() || playerView == null) return DetectStatus.Empty;
 
-        var src = DetectMarkerCenters(cameraFrame);
+        // Correct lens fisheye/barrel distortion before anything else, so markers and map
+        // content line up with the (rectilinear) reference view. A near-zero k1 is a no-op.
+        Mat workingFrame = cameraFrame;
+        if (Math.Abs(LensDistortionK1) > 0.001)
+        {
+            EnsureMat(ref _undistorted, cameraFrame.Rows, cameraFrame.Cols, cameraFrame.Type());
+            Undistort(cameraFrame, _undistorted, LensDistortionK1);
+            workingFrame = _undistorted;
+        }
+
+        var src = DetectMarkerCenters(workingFrame);
         if (src == null) return DetectStatus.NoMarkers;
 
         int dstW = playerView.Width;
@@ -134,7 +149,7 @@ public sealed class FigurineDetector : IDisposable
         var dstPts = new[] { refCenters[0], refCenters[1], refCenters[2], refCenters[3] };
         using var h = Cv2.GetPerspectiveTransform(srcPts, dstPts);
         EnsureMat(ref _warped, dstH, dstW, MatType.CV_8UC3);
-        Cv2.WarpPerspective(cameraFrame, _warped, h, new OpenCvSharp.Size(dstW, dstH));
+        Cv2.WarpPerspective(workingFrame, _warped, h, new OpenCvSharp.Size(dstW, dstH));
 
         EnsureMat(ref _diff, dstH, dstW, MatType.CV_8UC1);
         EnsureMat(ref _diffBgr, dstH, dstW, MatType.CV_8UC3);
@@ -448,6 +463,22 @@ public sealed class FigurineDetector : IDisposable
         return centers;
     }
 
+    /// <summary>Removes lens fisheye/barrel distortion from <paramref name="src"/> into
+    /// <paramref name="dst"/> using a single radial coefficient k1. Intrinsics are approximated
+    /// from the frame size (fx=fy=width, principal point at the center). Shared by the live
+    /// detector and <see cref="AutoTuner"/> so both correct frames identically.</summary>
+    public static void Undistort(Mat src, Mat dst, double k1)
+    {
+        using var K = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
+        K.Set<double>(0, 0, src.Width);   // fx
+        K.Set<double>(1, 1, src.Width);   // fy
+        K.Set<double>(0, 2, src.Width / 2.0);  // cx
+        K.Set<double>(1, 2, src.Height / 2.0); // cy
+        using var distCoeffs = Mat.Zeros(1, 5, MatType.CV_64FC1).ToMat();
+        distCoeffs.Set<double>(0, 0, k1);
+        Cv2.Undistort(src, dst, K, distCoeffs);
+    }
+
     private static void EnsureMat(ref Mat mat, int rows, int cols, MatType type)
     {
         if (mat != null && !mat.IsDisposed && mat.Rows == rows && mat.Cols == cols && mat.Type() == type)
@@ -596,5 +627,6 @@ public sealed class FigurineDetector : IDisposable
         _thresh?.Dispose();
         _morphed?.Dispose();
         _colorDist?.Dispose();
+        _undistorted?.Dispose();
     }
 }

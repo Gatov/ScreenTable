@@ -15,6 +15,8 @@ public class CameraSettingsForm : Form
     private readonly Label _thresholdLabel;
     private readonly TrackBar _minSizeSlider;
     private readonly Label _minSizeLabel;
+    private readonly TrackBar _distortionSlider;
+    private readonly Label _distortionLabel;
     private readonly CheckBox _enabledCheck;
     private readonly CheckBox _showGmCheck;
     private readonly CheckBox _showFiguresCheck;
@@ -27,65 +29,115 @@ public class CameraSettingsForm : Form
         Text = "Camera Settings";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(460, 396);
         MinimizeBox = false;
         MaximizeBox = false;
+        Font = new Font("Segoe UI", 9F);
+        // Let WinForms size everything from content so the layout survives any DPI
+        // scaling instead of clipping under hard-coded pixel coordinates.
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
 
-        int y = 12;
-        Controls.Add(new Label { Text = "Device:", Location = new Point(12, y + 3), AutoSize = true });
+        // Width the sliders / combo should fill. Drives the dialog's overall width.
+        const int contentWidth = 440;
+
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            Padding = new Padding(14),
+        };
+        Controls.Add(root);
+
+        // --- Camera device --------------------------------------------------
+        var deviceGroup = NewGroup("Camera");
+        var deviceLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 3,
+            RowCount = 1,
+            Padding = new Padding(8, 4, 8, 8),
+        };
+        deviceLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        deviceLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        deviceLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        deviceLayout.Controls.Add(new Label
+        {
+            Text = "Device:",
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 0, 8, 0),
+        }, 0, 0);
         _deviceCombo = new ComboBox
         {
-            Location = new Point(110, y),
-            Width = 260,
+            Dock = DockStyle.Fill,
             DropDownWidth = 360,
-            DropDownStyle = ComboBoxStyle.DropDownList
+            DropDownStyle = ComboBoxStyle.DropDownList,
         };
-        Controls.Add(_deviceCombo);
-        var rescanBtn = new Button { Text = "Rescan", Location = new Point(376, y - 1), Width = 70 };
+        deviceLayout.Controls.Add(_deviceCombo, 1, 0);
+        var rescanBtn = new Button
+        {
+            Text = "Rescan",
+            AutoSize = true,
+            Margin = new Padding(8, 0, 0, 0),
+        };
         rescanBtn.Click += (_, _) => PopulateDevices();
-        Controls.Add(rescanBtn);
+        deviceLayout.Controls.Add(rescanBtn, 2, 0);
+        deviceGroup.Controls.Add(deviceLayout);
+        root.Controls.Add(deviceGroup);
 
-        y += 36;
-        _intervalLabel = new Label { Location = new Point(12, y + 3), AutoSize = true };
-        Controls.Add(_intervalLabel);
+        // --- Detection tuning ----------------------------------------------
+        var detectGroup = NewGroup("Detection");
+        var detectLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            Padding = new Padding(8, 4, 8, 8),
+        };
+
+        _intervalLabel = new Label { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
         _intervalSlider = new TrackBar
         {
-            Location = new Point(12, y + 22),
-            Width = 434,
+            Dock = DockStyle.Fill,
+            MinimumSize = new Size(contentWidth, 0),
             Minimum = 10,
             Maximum = 50,
             TickFrequency = 5,
             Value = Math.Clamp((int)Math.Round(settings.IntervalSeconds * 10), 10, 50)
         };
         _intervalSlider.ValueChanged += (_, _) => UpdateIntervalLabel();
-        Controls.Add(_intervalSlider);
+        detectLayout.Controls.Add(_intervalLabel);
+        detectLayout.Controls.Add(_intervalSlider);
         UpdateIntervalLabel();
 
         // Sensitivity = how different a patch must be from the map to count as an object.
-        y += 70;
-        _thresholdLabel = new Label { Location = new Point(12, y + 3), AutoSize = true };
-        Controls.Add(_thresholdLabel);
+        _thresholdLabel = new Label { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
         _thresholdSlider = new TrackBar
         {
-            Location = new Point(12, y + 22),
-            Width = 434,
+            Dock = DockStyle.Fill,
+            MinimumSize = new Size(contentWidth, 0),
             Minimum = 20,
             Maximum = 150,
             TickFrequency = 10,
             Value = Math.Clamp(settings.DiffThreshold, 20, 150)
         };
         _thresholdSlider.ValueChanged += (_, _) => UpdateThresholdLabel();
-        Controls.Add(_thresholdSlider);
+        detectLayout.Controls.Add(_thresholdLabel);
+        detectLayout.Controls.Add(_thresholdSlider);
         UpdateThresholdLabel();
 
         // Smallest object that counts, in grid cells (one cell = one 2.5 cm token).
-        y += 70;
-        _minSizeLabel = new Label { Location = new Point(12, y + 3), AutoSize = true };
-        Controls.Add(_minSizeLabel);
+        _minSizeLabel = new Label { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
         _minSizeSlider = new TrackBar
         {
-            Location = new Point(12, y + 22),
-            Width = 434,
+            Dock = DockStyle.Fill,
+            MinimumSize = new Size(contentWidth, 0),
             Minimum = 1,
             Maximum = 6,
             SmallChange = 1,
@@ -94,57 +146,101 @@ public class CameraSettingsForm : Form
             Value = Math.Clamp((int)Math.Round(settings.MinObjectCells), 1, 6)
         };
         _minSizeSlider.ValueChanged += (_, _) => UpdateMinSizeLabel();
-        Controls.Add(_minSizeSlider);
+        detectLayout.Controls.Add(_minSizeLabel);
+        detectLayout.Controls.Add(_minSizeSlider);
         UpdateMinSizeLabel();
 
-        y += 70;
+        // Lens fisheye/barrel correction (OpenCV k1). The TrackBar is integer-only, so units
+        // 0..40 map to k1 = value / 200.0 — a 0.005 step over 0.000..0.200.
+        _distortionLabel = new Label { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+        _distortionSlider = new TrackBar
+        {
+            Dock = DockStyle.Fill,
+            MinimumSize = new Size(contentWidth, 0),
+            Minimum = 0,
+            Maximum = 40,
+            SmallChange = 1,
+            LargeChange = 5,
+            TickFrequency = 5,
+            Value = Math.Clamp((int)Math.Round(settings.LensDistortionK1 * 200), 0, 40)
+        };
+        _distortionSlider.ValueChanged += (_, _) => UpdateDistortionLabel();
+        detectLayout.Controls.Add(_distortionLabel);
+        detectLayout.Controls.Add(_distortionSlider);
+        UpdateDistortionLabel();
+
+        detectGroup.Controls.Add(detectLayout);
+        root.Controls.Add(detectGroup);
+
+        // --- Display options ------------------------------------------------
+        var displayGroup = NewGroup("Display");
+        var displayLayout = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(8, 4, 8, 8),
+        };
         _enabledCheck = new CheckBox
         {
             Text = "Detection enabled",
-            Location = new Point(12, y),
             AutoSize = true,
+            Margin = new Padding(0, 4, 0, 4),
             Checked = settings.Enabled
         };
-        Controls.Add(_enabledCheck);
-
-        y += 24;
         _showGmCheck = new CheckBox
         {
             Text = "Show detections on GM view",
-            Location = new Point(12, y),
             AutoSize = true,
+            Margin = new Padding(0, 4, 0, 4),
             Checked = settings.ShowOnGmView
         };
-        Controls.Add(_showGmCheck);
-
-        y += 24;
         _showFiguresCheck = new CheckBox
         {
             Text = "Show figurine images (off = green circles)",
-            Location = new Point(12, y),
             AutoSize = true,
+            Margin = new Padding(0, 4, 0, 4),
             Checked = settings.ShowFigurines
         };
-        Controls.Add(_showFiguresCheck);
+        displayLayout.Controls.Add(_enabledCheck);
+        displayLayout.Controls.Add(_showGmCheck);
+        displayLayout.Controls.Add(_showFiguresCheck);
+        displayGroup.Controls.Add(displayLayout);
+        root.Controls.Add(displayGroup);
 
-        var okBtn = new Button
+        // --- Buttons --------------------------------------------------------
+        var buttons = new FlowLayoutPanel
         {
-            Text = "OK",
-            DialogResult = DialogResult.OK,
-            Location = new Point(284, 358),
-            Width = 80
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = new Padding(0, 6, 0, 0),
         };
         var cancelBtn = new Button
         {
             Text = "Cancel",
             DialogResult = DialogResult.Cancel,
-            Location = new Point(370, 358),
-            Width = 80
+            AutoSize = true,
+            MinimumSize = new Size(80, 0),
+            Margin = new Padding(6, 0, 0, 0),
         };
+        var okBtn = new Button
+        {
+            Text = "OK",
+            DialogResult = DialogResult.OK,
+            AutoSize = true,
+            MinimumSize = new Size(80, 0),
+            Margin = new Padding(6, 0, 0, 0),
+        };
+        buttons.Controls.Add(cancelBtn);
+        buttons.Controls.Add(okBtn);
         AcceptButton = okBtn;
         CancelButton = cancelBtn;
-        Controls.Add(okBtn);
-        Controls.Add(cancelBtn);
+        root.Controls.Add(buttons);
 
         okBtn.Click += (_, _) =>
         {
@@ -152,6 +248,7 @@ public class CameraSettingsForm : Form
             _settings.IntervalSeconds = _intervalSlider.Value / 10.0;
             _settings.DiffThreshold = _thresholdSlider.Value;
             _settings.MinObjectCells = _minSizeSlider.Value;
+            _settings.LensDistortionK1 = _distortionSlider.Value / 200.0;
             _settings.Enabled = _enabledCheck.Checked;
             _settings.ShowOnGmView = _showGmCheck.Checked;
             _settings.ShowFigurines = _showFiguresCheck.Checked;
@@ -160,6 +257,16 @@ public class CameraSettingsForm : Form
 
         PopulateDevices();
     }
+
+    private static GroupBox NewGroup(string text) => new()
+    {
+        Text = text,
+        Dock = DockStyle.Top,
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        Margin = new Padding(0, 0, 0, 10),
+        Padding = new Padding(6, 4, 6, 6),
+    };
 
     private void UpdateIntervalLabel()
     {
@@ -175,6 +282,11 @@ public class CameraSettingsForm : Form
     {
         int cells = _minSizeSlider.Value;
         _minSizeLabel.Text = $"Min object size: {cells} cell{(cells == 1 ? "" : "s")} (one cell = 2.5 cm)";
+    }
+
+    private void UpdateDistortionLabel()
+    {
+        _distortionLabel.Text = $"Lens distortion: {_distortionSlider.Value / 200.0:0.000}  (0 = none)";
     }
 
     private void PopulateDevices()
