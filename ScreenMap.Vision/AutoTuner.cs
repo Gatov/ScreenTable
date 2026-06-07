@@ -61,7 +61,13 @@ public sealed class AutoTuner
                 if (pixelsPerCell > 0)
                 {
                     double cells = 2.0 * dets[i].Radius / pixelsPerCell;
-                    if (cells > 4.5) continue; // Filter out massive glare
+                    if (cells > 4.5) 
+                    {
+                        // Filter out massive glare by invalidating this threshold completely.
+                        // If it produces screen-sized blobs, it's far too sensitive.
+                        validRadii.Clear();
+                        break;
+                    }
                 }
                 validRadii.Add(dets[i].Radius);
             }

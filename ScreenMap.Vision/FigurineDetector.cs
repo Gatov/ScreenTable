@@ -185,7 +185,7 @@ public sealed class FigurineDetector : IDisposable
 
         // Mask out the fiducial regions (centered on the reference markers, wherever they
         // are) — those always differ between the rendered view and the warped camera frame.
-        MaskAround(_thresh, refCenters.Values, 95);
+        MaskAround(_thresh, refCenters.Values, 160);
 
         // Apply a Closing operation to bridge gaps and connect fragmented reflections of a single figurine
         using var closeKernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(15, 15));
@@ -211,6 +211,19 @@ public sealed class FigurineDetector : IDisposable
             Cv2.MinEnclosingCircle(hull, out var center, out float radius);
             float rawRadius = radius;
             double fill = radius > 0 ? Cv2.ContourArea(hull) / (Math.PI * radius * radius) : 0;
+            float score = MeanColorDistanceV2(_playerMat, _warped, hull);
+            double cells = PixelsPerCell > 0 ? 2.0 * radius / PixelsPerCell : 0;
+
+            if (rawRadius > 5)
+            {
+                string dropReason = "Kept";
+                if (MinFillRatio > 0 && fill < MinFillRatio) dropReason = "LowFill";
+                else if (PixelsPerCell > 0 && (cells < MinObjectCells || cells > MaxObjectCells)) dropReason = $"SizeCells (min={MinObjectCells:F2})";
+                else if (PixelsPerCell <= 0 && Cv2.ContourArea(hull) < MinBlobAreaPx) dropReason = "AreaPx";
+                
+                Console.Error.WriteLine($"    [Diag] Blob at {center.X:F0},{center.Y:F0} | radius={rawRadius:F1} (cells={cells:F2}) | fill={fill:F2} | score={score:F0} | action={dropReason}");
+            }
+
             // Reject diffuse / smeared blobs that don't fill their enclosing circle — a solid
             // token does, glare and registration artifacts do not.
             if (MinFillRatio > 0 && fill < MinFillRatio) continue;
@@ -218,7 +231,6 @@ public sealed class FigurineDetector : IDisposable
             {
                 // Grid scale known. Object size is measured as DIAMETER in cells (a mini occupies
                 // ~one grid square == one cell across). Drop anything outside the size band.
-                double cells = 2.0 * radius / PixelsPerCell;
                 if (cells < MinObjectCells || cells > MaxObjectCells) continue;
             }
             else
@@ -227,9 +239,63 @@ public sealed class FigurineDetector : IDisposable
                 if (Cv2.ContourArea(hull) < MinBlobAreaPx) continue;
             }
             // Score: Distance between the average color of the reference and the average color of the camera frame
-            float score = MeanColorDistanceV2(_playerMat, _warped, hull);
             candidates.Add((new FigurineDetection(new PointF(center.X, center.Y), radius, score), rawRadius, fill));
         }
+
+        // Merge overlapping candidates (fragments of large 3D figurines).
+        // By merging *after* the raw contour area/fill filters and color scoring, we preserve
+        // our ability to reject stringy/diffuse glare noise, while elegantly consolidating 
+        // valid figurine parts (e.g. body and head) into a single overarching circle.
+        bool mergedAny;
+        do
+        {
+            mergedAny = false;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                for (int j = i + 1; j < candidates.Count; j++)
+                {
+                    var d1 = candidates[i].det;
+                    var d2 = candidates[j].det;
+                    
+                    float dx = d1.Center.X - d2.Center.X;
+                    float dy = d1.Center.Y - d2.Center.Y;
+                    float dist = (float)Math.Sqrt(dx * dx + dy * dy);
+                    
+                    // Merge if distance is < 85% of combined radii.
+                    // This easily merges fragments of the same 3D figurine, but keeps 
+                    // adjacent separate player tokens (bases touching) distinct.
+                    if (dist < (d1.Radius + d2.Radius) * 0.85f)
+                    {
+                        float newRadius;
+                        PointF newCenter;
+                        if (dist + d2.Radius <= d1.Radius)
+                        {
+                            newRadius = d1.Radius;
+                            newCenter = d1.Center;
+                        }
+                        else if (dist + d1.Radius <= d2.Radius)
+                        {
+                            newRadius = d2.Radius;
+                            newCenter = d2.Center;
+                        }
+                        else
+                        {
+                            newRadius = (dist + d1.Radius + d2.Radius) / 2f;
+                            float t = (newRadius - d1.Radius) / dist;
+                            newCenter = new PointF(d1.Center.X + t * -dx, d1.Center.Y + t * -dy);
+                        }
+
+                        // The merged detection inherits the highest confidence score among its fragments.
+                        var mergedDet = new FigurineDetection(newCenter, newRadius, Math.Max(d1.Score, d2.Score));
+                        candidates[i] = (mergedDet, Math.Max(candidates[i].rawRadius, candidates[j].rawRadius), Math.Min(candidates[i].fill, candidates[j].fill));
+                        candidates.RemoveAt(j);
+                        mergedAny = true;
+                        break;
+                    }
+                }
+                if (mergedAny) break;
+            }
+        } while (mergedAny);
 
         // Rank by confidence and keep only the expected number (or the auto-guessed count).
         candidates.Sort((a, b) => b.det.Score.CompareTo(a.det.Score));
@@ -365,15 +431,11 @@ public sealed class FigurineDetector : IDisposable
 
     private static void MaskOutsideQuad(Mat mask, System.Collections.Generic.IEnumerable<Point2f> centers)
     {
-        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
-        foreach (var c in centers)
-        {
-            minX = Math.Min(minX, c.X); maxX = Math.Max(maxX, c.X);
-            minY = Math.Min(minY, c.Y); maxY = Math.Max(maxY, c.Y);
-        }
-        var keep = new Rect((int)minX, (int)minY, (int)(maxX - minX), (int)(maxY - minY))
-            .Intersect(new Rect(0, 0, mask.Cols, mask.Rows));
-        // Zero everything outside the marker bounding box.
+        // Instead of masking to the fiducial marker centers, which cuts off the 12% 
+        // playable margin of the map, we preserve the entire map area but crop out
+        // a 10px safety margin to avoid catching physical screen bezels warped into the corners.
+        var keep = new Rect(10, 10, mask.Cols - 20, mask.Rows - 20);
+        // Zero everything outside the bounding box.
         if (keep.Top > 0) Cv2.Rectangle(mask, new Rect(0, 0, mask.Cols, keep.Top), Scalar.Black, -1);
         if (keep.Bottom < mask.Rows) Cv2.Rectangle(mask, new Rect(0, keep.Bottom, mask.Cols, mask.Rows - keep.Bottom), Scalar.Black, -1);
         if (keep.Left > 0) Cv2.Rectangle(mask, new Rect(0, 0, keep.Left, mask.Rows), Scalar.Black, -1);

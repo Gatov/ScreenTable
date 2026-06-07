@@ -11,7 +11,11 @@
       "PowerShell(git *)",
       "PowerShell(dotnet run *)",
       "Bash(git add *)",
-      "Bash(git commit -q -m 'Add design spec: figurine crops on the map *)"
+      "Bash(git commit -q -m 'Add design spec: figurine crops on the map *)",
+      "Bash(git commit -q -m 'Add design spec: grid-anchored auto-adjust detection *)",
+      "Read(//mnt/c/Work/**)",
+      "Bash(dotnet test *)",
+      "PowerShell(dotnet test *)"
     ]
   }
 }

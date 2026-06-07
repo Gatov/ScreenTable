@@ -49,9 +49,6 @@ public class TestRunner
         try
         {
             // --- Stabilize: discard N frames to let camera auto-exposure settle ---
-            // TODO: Consider diff-based stabilization (compare consecutive frames until
-            // the difference drops below a threshold) if simple frame-discard proves
-            // insufficient for reliable detection.
             Mat frame = null;
             for (int i = 0; i < _settleFrames; i++)
             {
@@ -83,89 +80,126 @@ public class TestRunner
                 var rawPath = Path.Combine(runDir, "raw-frame.png");
                 Cv2.ImWrite(rawPath, capturedFrame);
                 result.RawFramePath = Path.GetRelativePath(_outputDir, rawPath);
-
-                // Reference scene will be saved after detection to include overlays
             }
 
-            // --- AutoTuner Check ---
-            var tuner = new AutoTuner();
-            // Assume the frame width spans about 30 cells to test grid-aware tuning
-            float simulatedPpc = capturedFrame.Width / 30f;
-            var tuneResult = tuner.Tune(capturedFrame, referenceScene, pixelsPerCell: simulatedPpc);
-            Console.Error.WriteLine($"    [AutoTuner] Success: {tuneResult.Success}, Thresh: {tuneResult.DiffThreshold}, " +
-                                    $"Blobs: {tuneResult.BlobCount}, MinCells: {tuneResult.MinObjectCells:F1}, Msg: {tuneResult.Message}");
-
-            // --- Count markers found (for diagnostics) ---
-            using var dict = CvAruco.GetPredefinedDictionary(ArucoMarkers.DictName);
-            var detParams = ArucoMarkers.CreateDetectorParameters();
-            CvAruco.DetectMarkers(capturedFrame, dict, out _, out var ids, detParams, out _);
-            result.MarkerCount = ids?.Length ?? 0;
-            result.MarkersDetected = result.MarkerCount >= ArucoMarkers.MarkerCount;
-
-            // --- Run the detection pipeline ---
-            using var detector = new FigurineDetector { ProduceCrops = true };
-            if (tuneResult.Success)
-            {
-                detector.DiffThreshold = tuneResult.DiffThreshold;
-                detector.MinObjectCells = tuneResult.MinObjectCells;
-                detector.PixelsPerCell = simulatedPpc;
-            }
-            
-            var sw = Stopwatch.StartNew();
-            var status = detector.Detect(capturedFrame, referenceScene, out var detections);
-            sw.Stop();
-
-            result.ProcessingMs = sw.Elapsed.TotalMilliseconds;
-            result.DetectStatus = status.ToString();
-            result.FigurineCount = detections.Length;
-            result.Figurines = detections.Select(d => new DetectionResult.FigurineInfo
-            {
-                CenterX = d.Center.X,
-                CenterY = d.Center.Y,
-                Radius = d.Radius,
-            }).ToArray();
-
-            // --- Save annotated frame and reference scene ---
-            if (runDir != null)
-            {
-                Mat baseImageForAnnotation = (detector.Warped != null && !detector.Warped.IsDisposed && !detector.Warped.Empty()) 
-                    ? detector.Warped 
-                    : capturedFrame;
-
-                var annotated = BuildAnnotatedImage(baseImageForAnnotation, detections, ids, result);
-                var annotatedPath = Path.Combine(runDir, "annotated.png");
-                Cv2.ImWrite(annotatedPath, annotated);
-                annotated.Dispose();
-                result.AnnotatedFramePath = Path.GetRelativePath(_outputDir, annotatedPath);
-
-                using var annotatedRef = (Bitmap)referenceScene.Clone();
-                using (var g = Graphics.FromImage(annotatedRef))
-                {
-                    g.SmoothingMode = SmoothingMode.HighQuality;
-                    if (expectedFigurine.HasValue)
-                    {
-                        using var pinkBrush = new SolidBrush(Color.FromArgb(128, 255, 20, 147)); // DeepPink 50%
-                        float r = expectedRadius;
-                        g.FillEllipse(pinkBrush, expectedFigurine.Value.X - r, expectedFigurine.Value.Y - r, r * 2, r * 2);
-                    }
-                    if (detections != null)
-                    {
-                        using var blueBrush = new SolidBrush(Color.FromArgb(128, 0, 0, 255)); // Blue 50%
-                        foreach (var d in detections)
-                        {
-                            g.FillEllipse(blueBrush, d.Center.X - d.Radius, d.Center.Y - d.Radius, d.Radius * 2, d.Radius * 2);
-                        }
-                    }
-                }
-                var refPath = Path.Combine(runDir, "reference-scene.png");
-                annotatedRef.Save(refPath, ImageFormat.Png);
-                result.ReferenceScenePath = Path.GetRelativePath(_outputDir, refPath);
-            }
+            return ExecutePipeline(capturedFrame, referenceScene, runId, mapName, randomSeed, expectedFigurine, expectedRadius, runDir, result);
         }
         catch (Exception ex)
         {
             result.ErrorMessage = ex.ToString();
             result.DetectStatus = "Error";
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Runs a detection cycle from a pre-captured frame (replay mode).
+    /// </summary>
+    public DetectionResult RunCycleReplay(Mat capturedFrame, Bitmap referenceScene,
+        int runId, string mapName, int randomSeed, string runDir)
+    {
+        var result = new DetectionResult
+        {
+            RunId = runId,
+            MapName = mapName,
+            RandomSeed = randomSeed,
+        };
+
+        try
+        {
+            return ExecutePipeline(capturedFrame, referenceScene, runId, mapName, randomSeed, null, 0, runDir, result);
+        }
+        catch (Exception ex)
+        {
+            result.ErrorMessage = ex.ToString();
+            result.DetectStatus = "Error";
+            return result;
+        }
+    }
+
+    private DetectionResult ExecutePipeline(Mat capturedFrame, Bitmap referenceScene,
+        int runId, string mapName, int randomSeed, PointF? expectedFigurine, float expectedRadius, string runDir, DetectionResult result)
+    {
+        // --- AutoTuner Check ---
+        var tuner = new AutoTuner();
+        // Assume the frame width spans about 30 cells to test grid-aware tuning
+        float simulatedPpc = capturedFrame.Width / 30f;
+        var tuneResult = tuner.Tune(capturedFrame, referenceScene, pixelsPerCell: simulatedPpc);
+        Console.Error.WriteLine($"    [AutoTuner] Success: {tuneResult.Success}, Thresh: {tuneResult.DiffThreshold}, " +
+                                $"Blobs: {tuneResult.BlobCount}, MinCells: {tuneResult.MinObjectCells:F1}, Msg: {tuneResult.Message}");
+
+        // --- Count markers found (for diagnostics) ---
+        using var dict = CvAruco.GetPredefinedDictionary(ArucoMarkers.DictName);
+        var detParams = ArucoMarkers.CreateDetectorParameters();
+        CvAruco.DetectMarkers(capturedFrame, dict, out _, out var ids, detParams, out _);
+        result.MarkerCount = ids?.Length ?? 0;
+        result.MarkersDetected = result.MarkerCount >= ArucoMarkers.MarkerCount;
+
+        // --- Run the detection pipeline ---
+        using var detector = new FigurineDetector { ProduceCrops = true };
+        if (tuneResult.Success)
+        {
+            detector.DiffThreshold = tuneResult.DiffThreshold;
+            detector.MinObjectCells = tuneResult.MinObjectCells;
+            detector.PixelsPerCell = simulatedPpc;
+            detector.ExpectedCount = tuneResult.BlobCount;
+        }
+        
+        var sw = Stopwatch.StartNew();
+        var status = detector.Detect(capturedFrame, referenceScene, out var detections);
+        sw.Stop();
+
+        result.ProcessingMs = sw.Elapsed.TotalMilliseconds;
+        result.DetectStatus = status.ToString();
+        result.FigurineCount = detections.Length;
+        result.Figurines = detections.Select(d => new DetectionResult.FigurineInfo
+        {
+            CenterX = d.Center.X,
+            CenterY = d.Center.Y,
+            Radius = d.Radius,
+        }).ToArray();
+
+        // --- Save annotated frame and reference scene ---
+        if (runDir != null)
+        {
+            Directory.CreateDirectory(runDir);
+
+            // Save clean reference for future replays
+            var cleanRefPath = Path.Combine(runDir, "clean-reference.png");
+            referenceScene.Save(cleanRefPath, ImageFormat.Png);
+
+            Mat baseImageForAnnotation = (detector.Warped != null && !detector.Warped.IsDisposed && !detector.Warped.Empty()) 
+                ? detector.Warped 
+                : capturedFrame;
+
+            var annotated = BuildAnnotatedImage(baseImageForAnnotation, detections, ids, result);
+            var annotatedPath = Path.Combine(runDir, "annotated.png");
+            Cv2.ImWrite(annotatedPath, annotated);
+            annotated.Dispose();
+            result.AnnotatedFramePath = Path.GetRelativePath(_outputDir, annotatedPath);
+
+            using var annotatedRef = (Bitmap)referenceScene.Clone();
+            using (var g = Graphics.FromImage(annotatedRef))
+            {
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                if (expectedFigurine.HasValue)
+                {
+                    using var pinkBrush = new SolidBrush(Color.FromArgb(128, 255, 20, 147)); // DeepPink 50%
+                    float r = expectedRadius;
+                    g.FillEllipse(pinkBrush, expectedFigurine.Value.X - r, expectedFigurine.Value.Y - r, r * 2, r * 2);
+                }
+                if (detections != null)
+                {
+                    using var blueBrush = new SolidBrush(Color.FromArgb(128, 0, 0, 255)); // Blue 50%
+                    foreach (var d in detections)
+                    {
+                        g.FillEllipse(blueBrush, d.Center.X - d.Radius, d.Center.Y - d.Radius, d.Radius * 2, d.Radius * 2);
+                    }
+                }
+            }
+            var refPath = Path.Combine(runDir, "reference-scene.png");
+            annotatedRef.Save(refPath, ImageFormat.Png);
+            result.ReferenceScenePath = Path.GetRelativePath(_outputDir, refPath);
         }
 
         return result;

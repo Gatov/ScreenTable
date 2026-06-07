@@ -35,3 +35,4 @@ The test harness automatically runs the `AutoTuner` pipeline as part of its cycl
    * Inside the output directory (e.g., `C:\Temp\ScreenMapTests\run-0001`), the harness generates a `reference-scene.png`.
    * This image contains a **Pink 50% opaque circle** showing where the mock figurine was intended to be placed, and a **Blue 50% opaque circle** showing where the detector actually localized it.
    * If there is a `POS_MISMATCH` or `MARKERS_MISSING`, prompt the user to inspect these images along with `annotated.png` (the raw camera view) to help diagnose physical glare, masking boundaries, or camera clipping problems.
+   * **Note:** If markers are not found (`MARKERS_MISSING`) or the camera fails to open, try another camera index (e.g. 0, 1, 2) before giving up and prompting the user.

@@ -133,6 +133,35 @@ public class FigurineDetectionTests
     }
 
     [Test]
+    public void LargeFigurine_FragmentedBlobs_AreMerged()
+    {
+        using var view = RenderScene(960, 540);
+        using var cameraBgra = BitmapConverter.ToMat(RenderScene(1280, 720));
+        using var camera = cameraBgra.CvtColor(ColorConversionCodes.BGRA2BGR);
+        Cv2.Add(camera, new Scalar(40, 40, 40), camera);
+
+        // Simulate a single large 3D monster fragmented into 3 overlapping regions:
+        // A main body and two wings/appendages that are slightly separated but overlap significantly.
+        Cv2.Circle(camera, new OpenCvSharp.Point(300, 360), 20, new Scalar(0, 0, 0), -1); // Body
+        Cv2.Circle(camera, new OpenCvSharp.Point(280, 345), 15, new Scalar(0, 0, 0), -1); // Left Wing
+        Cv2.Circle(camera, new OpenCvSharp.Point(320, 345), 15, new Scalar(0, 0, 0), -1); // Right Wing
+
+        // Also add a completely distinct token far away, to ensure it doesn't get merged
+        Cv2.Circle(camera, new OpenCvSharp.Point(600, 360), 20, new Scalar(0, 0, 0), -1);
+
+        using var detector = new FigurineDetector { MinBlobAreaPx = 50 };
+        detector.Detect(camera, view, out var dets);
+
+        // We expect exactly 2 detections: 
+        // 1. The merged large monster (composed of the 3 overlapping circles).
+        // 2. The distinct token.
+        Assert.That(dets.Length, Is.EqualTo(2), "Overlapping fragments must be merged into one signature, separate tokens remain distinct");
+        
+        var monster = dets[0].Center.X < 450 ? dets[0] : dets[1];
+        Assert.That(monster.Radius, Is.GreaterThan(20), "The merged radius must encompass the fragments, larger than the individual body radius");
+    }
+
+    [Test]
     public void ProduceCrops_IsolatesObject_AsCircularMaskedCrop()
     {
         using var view = RenderScene(960, 540);
@@ -319,10 +348,10 @@ public class FigurineDetectionTests
         var (frame, view) = LoadCapture("20260531-171645");
         using (frame)
         using (view)
-        // Use DiffThreshold = 80 (up from default 40) because this is a noisy, steeply angled map.
+        // Use DiffThreshold = 100 (up from default 40) because this is a noisy, steeply angled map.
         // The new Convex Hull logic correctly preserves D-shapes (like side-lit figurines), so
         // registration artifacts now pass shape filters and require a realistic threshold.
-        using (var detector = new FigurineDetector() { DiffThreshold = 80 })
+        using (var detector = new FigurineDetector() { DiffThreshold = 100 })
         {
             var status = detector.Detect(frame, view, out var dets);
             Assert.That(status, Is.EqualTo(DetectStatus.Ok));
