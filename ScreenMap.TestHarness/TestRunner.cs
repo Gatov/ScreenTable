@@ -158,6 +158,7 @@ public class TestRunner
             rawDetector.MinObjectCells = tuneResult.MinObjectCells;
             rawDetector.PixelsPerCell = simulatedPpc;
             rawDetector.ExpectedCount = tuneResult.BlobCount;
+            Console.Error.WriteLine("--- RAW DETECTOR ---");
             rawDetector.Detect(capturedFrame, referenceScene, out _);
             result.BlobsWithoutDistortionFix = rawDetector.LastContourCount;
         }
@@ -180,6 +181,7 @@ public class TestRunner
         }
         
         var sw = Stopwatch.StartNew();
+        Console.Error.WriteLine($"--- FINAL DETECTOR --- (k1={tuneResult.LensDistortionK1:F2}, MinCells={detector.MinObjectCells:F2}, ppc={detector.PixelsPerCell:F1})");
         var status = detector.Detect(processingFrame, referenceScene, out var detections);
         sw.Stop();
         

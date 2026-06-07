@@ -58,12 +58,12 @@ public sealed class AutoTuner
 
         var bestSweep = new List<(int threshold, double[] radiiPx)>();
         double bestK1 = 0;
-        int minTotalBlobs = int.MaxValue;
+        double minTotalConfidence = double.MaxValue;
 
         // The tuner clamps its final minArea recommendation to 200px at the lowest
         using var detector = new FigurineDetector { MinBlobAreaPx = 200 };
 
-        for (double k1 = -0.15; k1 <= 0.151; k1 += 0.05)
+        for (double k1 = 0.0; k1 <= 0.201; k1 += 0.025)
         {
             using Mat undistortedFrame = new Mat();
             if (Math.Abs(k1) > 0.001)
@@ -78,7 +78,7 @@ public sealed class AutoTuner
             }
 
             var currentSweep = new List<(int threshold, double[] radiiPx)>();
-            int currentTotalBlobs = 0;
+            double currentTotalConfidence = 0;
             bool anyOk = false;
 
             for (int t = MinThreshold; t <= MaxThreshold; t += ThresholdStep)
@@ -103,12 +103,12 @@ public sealed class AutoTuner
                     validRadii.Add(dets[i].Radius);
                 }
                 currentSweep.Add((t, validRadii.ToArray()));
-                currentTotalBlobs += validRadii.Count;
+                currentTotalConfidence += detector.LastTotalConfidence;
             }
 
-            if (anyOk && currentTotalBlobs < minTotalBlobs)
+            if (anyOk && currentTotalConfidence < minTotalConfidence)
             {
-                minTotalBlobs = currentTotalBlobs;
+                minTotalConfidence = currentTotalConfidence;
                 bestK1 = k1;
                 bestSweep = currentSweep;
             }
@@ -157,14 +157,15 @@ public sealed class AutoTuner
             int idx = start + len / 2;
             int center = sweep[idx].threshold;
             double dia = Math.Floor(DiaCells(sweep[idx].radiiPx[0]) * 100) / 100.0;
+            double safeMinDia = Math.Max(0.3, dia * 0.6);
             return new AutoTuneResult
             {
                 Success = true,
                 DiffThreshold = center,
-                MinObjectCells = dia,
+                MinObjectCells = safeMinDia,
                 TokenDiameterCells = dia,
                 BlobCount = 1,
-                Message = $"sensitivity {center}, min size {dia} cells"
+                Message = $"sensitivity {center}, min size {safeMinDia:F2} cells"
             };
         }
 
@@ -190,14 +191,15 @@ public sealed class AutoTuner
         foreach (var r in sweep[best].radiiPx)
             if (TokenSized(r)) minDia = Math.Min(minDia, DiaCells(r));
         minDia = Math.Floor(minDia * 100) / 100.0;
+        double safeMinDiaFallback = Math.Max(0.3, minDia * 0.6);
         return new AutoTuneResult
         {
             Success = true,
             DiffThreshold = sweep[best].threshold,
-            MinObjectCells = minDia,
+            MinObjectCells = safeMinDiaFallback,
             TokenDiameterCells = minDia,
             BlobCount = bestBlobs,
-            Message = $"sensitivity {sweep[best].threshold}, min size {minDia} cells — {bestBlobs} blobs (place exactly one token)"
+            Message = $"sensitivity {sweep[best].threshold}, min size {safeMinDiaFallback:F2} cells — {bestBlobs} blobs (place exactly one token)"
         };
     }
 

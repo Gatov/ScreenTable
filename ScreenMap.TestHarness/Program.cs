@@ -50,6 +50,13 @@ internal static class Program
         bool physicalFigurine = args.Contains("--physical", StringComparer.OrdinalIgnoreCase);
         bool jsonOut = args.Contains("--json", StringComparer.OrdinalIgnoreCase);
         string replayDir = GetStringArg(args, "--replay", null);
+        string generateChessboardPath = GetStringArg(args, "--generate-chessboard", null);
+
+        if (generateChessboardPath != null)
+        {
+            GenerateChessboardImage(generateChessboardPath);
+            return 0;
+        }
 
         // --- Set up output ---
         Directory.CreateDirectory(outputDir);
@@ -338,12 +345,38 @@ internal static class Program
         return files;
     }
 
-    private static int GetIntArg(string[] args, string name, int defaultValue)
+    private static int GetIntArg(string[] args, string flag, int defaultValue)
     {
-        for (int i = 0; i < args.Length - 1; i++)
-            if (args[i].Equals(name, StringComparison.OrdinalIgnoreCase) && int.TryParse(args[i + 1], out var val))
-                return val;
+        int idx = Array.FindIndex(args, a => a.Equals(flag, StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0 && idx < args.Length - 1 && int.TryParse(args[idx + 1], out int val))
+            return val;
         return defaultValue;
+    }
+
+    private static void GenerateChessboardImage(string path)
+    {
+        int width = 3840;
+        int height = 2160;
+        int cellSize = 128;
+        using var bmp = new Bitmap(width, height);
+        using var g = Graphics.FromImage(bmp);
+        
+        g.Clear(Color.White);
+        using var brush = new SolidBrush(Color.Black);
+        
+        for (int y = 0; y < height; y += cellSize)
+        {
+            for (int x = 0; x < width; x += cellSize)
+            {
+                if (((x / cellSize) + (y / cellSize)) % 2 != 0)
+                {
+                    g.FillRectangle(brush, x, y, cellSize, cellSize);
+                }
+            }
+        }
+            
+        bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine($"Generated chessboard map to: {path}");
     }
 
     private static string GetStringArg(string[] args, string name, string defaultValue)

@@ -90,6 +90,10 @@ public sealed class FigurineDetector : IDisposable
     /// size/fill gates and the score-ranked cap. The "detected" half of drawn/detected.</summary>
     public int LastContourCount { get; private set; }
 
+    /// <summary>Total confidence energy (score * area) of all raw blobs found before filtering.
+    /// Used by AutoTuner to minimize distortion.</summary>
+    public double LastTotalConfidence { get; private set; }
+
     public DetectStatus Detect(Mat cameraFrame, Bitmap playerView, out FigurineDetection[] detections)
     {
         detections = Array.Empty<FigurineDetection>();
@@ -226,6 +230,8 @@ public sealed class FigurineDetector : IDisposable
             RetrievalModes.External, ContourApproximationModes.ApproxSimple);
         LastContourCount = contours.Length;
 
+        double totalConf = 0;
+
         // Candidate carries everything we need to keep the per-detection arrays 1:1 after
         // the score-ranked cap reorders them.
         var candidates = new List<(FigurineDetection det, double rawRadius, double fill)>(contours.Length);
@@ -236,9 +242,12 @@ public sealed class FigurineDetector : IDisposable
 
             Cv2.MinEnclosingCircle(hull, out var center, out float radius);
             float rawRadius = radius;
-            double fill = radius > 0 ? Cv2.ContourArea(hull) / (Math.PI * radius * radius) : 0;
+            double area = Cv2.ContourArea(hull);
+            double fill = radius > 0 ? area / (Math.PI * radius * radius) : 0;
             float score = MeanColorDistanceV2(_playerMat, _warped, hull);
             double cells = PixelsPerCell > 0 ? 2.0 * radius / PixelsPerCell : 0;
+
+            totalConf += Math.Abs(score) * area;
 
             if (rawRadius > 5)
             {
@@ -267,6 +276,8 @@ public sealed class FigurineDetector : IDisposable
             // Score: Distance between the average color of the reference and the average color of the camera frame
             candidates.Add((new FigurineDetection(new PointF(center.X, center.Y), radius, score), rawRadius, fill));
         }
+
+        LastTotalConfidence = totalConf;
 
         // Merge overlapping candidates (fragments of large 3D figurines).
         // By merging *after* the raw contour area/fill filters and color scoring, we preserve
